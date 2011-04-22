@@ -194,13 +194,16 @@ VHostConfig::~VHostConfig()
 {}
 
 void
-VHostConfig::load_vhost_rules(const Node& subdoc)
+VHostConfig::load_vhost_rules(const Node& doc)
 {
     std::string host;
-    UrlRuleConfig url_config;
-    subdoc["domain"] >> host;
-    url_config.load_url_rules(subdoc["url-rules"]);
-    host_map_.insert(std::make_pair(host, url_config));
+    for (size_t i = 0; i < doc.size(); i++) {
+        const Node& subdoc = doc[i];
+        UrlRuleConfig url_config;
+        subdoc["domain"] >> host;
+        url_config.load_url_rules(subdoc["url-rules"]);
+        host_map_.insert(std::make_pair(host, url_config));
+    }
 }
 
 static std::string

@@ -10,7 +10,7 @@
 
 namespace tube {
 
-int HttpConnectionFactory::kDefaultTimeout = 0;
+int HttpConnectionFactory::kDefaultTimeout = 15;
 
 Connection*
 HttpConnectionFactory::create_connection(int fd)

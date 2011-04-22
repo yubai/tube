@@ -25,12 +25,12 @@ handlers:
     max_entry_size: 16384
 
 host:
-  domain: default
-  url-rules:
-    - type: prefix
-      prefix: /index_theme
-      chain: 
-        - theme_static
-    - type: none
-      chain:
-        - default
+  - domain: default
+    url-rules:
+      - type: prefix
+        prefix: /index_theme
+        chain: 
+          - theme_static
+      - type: none
+        chain:
+          - default

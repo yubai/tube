@@ -18,10 +18,12 @@ The Tube Web Server is written in C/C++. To build Tube Web Server, you'll need t
  
 * ``SCons`` > 2.0. available at `<http://www.scons.org/>`_
 * boost library with the following component:
-   * ``boost::thread``
-   * ``boost::function``
-   * ``boost::smart_ptr``
-   * ``boost::xpressive``
+
+  * ``boost::thread``
+  * ``boost::function``
+  * ``boost::smart_ptr``
+  * ``boost::xpressive``
+
 * ``yaml-cpp``
 * ``ragel`` available at `<http://www.complang.org/ragel/>`_
 

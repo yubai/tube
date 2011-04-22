@@ -4,4 +4,8 @@
 build/
 config.log
 
+configure.conf
+*.gch
+scripts
 
+doc/manual/_build
