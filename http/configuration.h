@@ -98,6 +98,7 @@ public:
     int write_stage_pool_size() const {   return write_stage_pool_size_; }
     int recycle_threshold() const { return recycle_threshold_; }
     int handler_stage_pool_size() const { return handler_stage_pool_size_; }
+    int parser_stage_pool_size() const { return parser_stage_pool_size_; }
     int listen_queue_size() const { return listen_queue_size_; }
 
 private:
@@ -108,6 +109,7 @@ private:
     int write_stage_pool_size_;
     int recycle_threshold_;
     int handler_stage_pool_size_;
+    int parser_stage_pool_size_;
     int listen_queue_size_;
 };
 

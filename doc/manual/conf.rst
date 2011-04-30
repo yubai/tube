@@ -19,6 +19,7 @@ Tube's configuration file is very easy to understand if you know YAML.  Here, we
     address: 0.0.0.0
     port: 8000
     read_stage_pool_size: 2
+    parser_stage_pool_size: 2
     write_stage_pool_size: 4
     handler_stage_pool_size: 4
     listen_queue_size: 32
@@ -80,8 +81,8 @@ If set to zero, meaning disable idle connection scan, which is dangerous. Defaul
 
 This option has a performance impact.  If it's too small, server will frequently scan for idle connection, therefore affects the performance.  On the other hand, if it's too large, idle connection might use up all the file descriptors.
 
-read_stage_pool_size, write_stage_pool_size, handler_stage_pool_size
-````````````````````````````````````````````````````````````````````
+read_stage_pool_size, write_stage_pool_size, handler_stage_pool_size and parser_stage_pool_size
+```````````````````````````````````````````````````````````````````````````````````````````````
 
 Thread pool size for each stage.  
 
@@ -90,6 +91,8 @@ Thread pool size for each stage.
 ``write_stage_pool_size`` is used for sending buffer or file to client connection.  Tube employed a blocking writing scheme, therefore this value could be larger.  Mostly is could be 1-2 times larger than number of cores of the CPU.
 
 ``handler_stage_pool_size`` is the thread pool used for HTTP handlers, this parameter should be tuned according to server loads and demands.
+
+``parser_stage_pool_size`` is the thread pool used for parsing HTTP protocols, this parameter should be small, since parsing HTTP protocol is CPU bounded.
 
 Thread pool size is a sensitive performance tuning parameter, we will give some of advices in the :doc:`perf` chapter.
 
