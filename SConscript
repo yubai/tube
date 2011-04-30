@@ -18,6 +18,7 @@ http_source = ['http/http_parser.c',
                'http/http_wrapper.cc',
                'http/interface.cc',
                'http/static_handler.cc',
+               'http/static.mod.c',
                'http/configuration.cc',
                'http/io_cache.cc',
                'http/http_stages.cc',
@@ -76,6 +77,12 @@ def SolarisSpecificConf(ctx):
     source += port_completion_source
     return True
 
+def CheckRagel(ctx):
+    ctx.Message('Checking for Ragel... ')
+    ret = ctx.TryAction('ragel')
+    ctx.Result(bool(ret))
+    return ret
+
 if not env.GetOption('clean'):
     specific_conf = None;
     boost_headers = ['boost/noncopyable.hpp', 'boost/function.hpp', 'boost/bind.hpp', 'boost/shared_ptr.hpp', 'boost/xpressive/xpressive.hpp']
@@ -90,7 +97,7 @@ if not env.GetOption('clean'):
         print 'Kernel not supported yet'
         Exit(1)
     
-    conf = env.Configure(config_h='config.h', custom_tests={'SpecificConf': specific_conf})
+    conf = env.Configure(config_h='config.h', custom_tests={'SpecificConf': specific_conf, 'CheckRagel': CheckRagel})
     if not conf.CheckLibWithHeader('yaml-cpp', 'yaml-cpp/yaml.h', 'cxx'):
         Exit(1)
     if not conf.CheckLib('boost_thread-mt') and not conf.CheckLib('boost_thread'):
@@ -98,6 +105,8 @@ if not env.GetOption('clean'):
     for header in boost_headers:
         if not conf.CheckCXXHeader(header):
             Exit(1)
+    if not conf.CheckRagel():
+        Exit(1)
     if not conf.SpecificConf():
         Exit(1)
     env = conf.Finish()

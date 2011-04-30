@@ -48,7 +48,7 @@ public:
         return desc_->module_name;
     }
 
-    virtual std::string vender_name() const {
+    virtual std::string vendor_name() const {
         return desc_->vender_name;
     }
 };

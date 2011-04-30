@@ -251,6 +251,15 @@ HttpResponse::write_data(const byte* ptr, size_t size)
 }
 
 void
+HttpResponse::respond_with_message(const HttpResponseStatus& status)
+{
+    reset();
+    write_string("<html><head><title>" + status.reason + "</title></head>");
+    write_string("<body><h1>" + status.reason + "</h1></body></html>");
+    respond(status);
+}
+
+void
 HttpResponse::respond(const HttpResponseStatus& status)
 {
     // construct the header and send it long with the prepare buffer

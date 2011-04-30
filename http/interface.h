@@ -41,7 +41,7 @@ public:
     virtual ~BaseHttpHandlerFactory() {}
     virtual BaseHttpHandler* create() const = 0;
     virtual std::string module_name() const = 0;
-    virtual std::string vender_name() const = 0;
+    virtual std::string vendor_name() const = 0;
 };
 
 }

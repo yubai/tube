@@ -25,7 +25,10 @@ def CompilerMTOption():
 
 essential_cflags = ' -pipe -Wall'
 cflags = '-g -DLOG_ENABLED'
-inc_path = ['.', '/usr/local/include']
+inc_path = ['.']
+
+if GetOS() == 'FreeBSD':
+    inc_path.append('/usr/local/include')
 
 if ARGUMENTS.get('release', 0) == '1':
     cflags = '-Os -mtune=generic'
@@ -52,3 +55,4 @@ opts.Save('configure.conf', env)
 
 Export('opts', 'env', 'GetOS')
 SConscript('./SConscript', variant_dir='build', duplicate=0)
+SConscript('./modules/mod_python/SConscript', variant_dir='build/modules/mod_python', duplicate=0)

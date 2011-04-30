@@ -9,7 +9,6 @@
 
 #include "http/static_handler.h"
 #include "utils/logger.h"
-#include "module.h"
 
 namespace tube {
 
@@ -288,16 +287,14 @@ send_client_cache_info(HttpResponse& response, time_t* mtime, std::string etag)
 }
 
 static void
-send_client_data(HttpResponse& response, const HttpResponseStatus& status,
-                 byte* cached_entry, int file_desc, off64_t offset,
+send_client_data(HttpResponse& response, byte* cached_entry, int file_desc,
+                 off64_t offset,
                  off64_t length)
 {
     if (cached_entry) {
         ::close(file_desc);
         response.write_data(cached_entry + offset, length);
-        response.respond(status);
     } else {
-        response.respond(status);
         response.write_file(file_desc, offset, length);
     }
 }
@@ -358,11 +355,9 @@ StaticHttpHandler::respond_file_content(const std::string& path,
     }
     response.set_content_length(length);
     send_client_cache_info(response, &stat.st_mtime, etag);
+    response.respond(ret_status);
     if (request.method() != HTTP_HEAD) {
-        send_client_data(response, ret_status, cached_entry, file_desc, offset,
-                         length);
-    } else {
-        response.respond(HttpResponseStatus::kHttpResponseOK);
+        send_client_data(response, cached_entry, file_desc, offset, length);
     }
 done:
     delete [] cached_entry;
@@ -439,12 +434,11 @@ StaticHttpHandler::respond_directory_list(const std::string& path,
     closedir(dirp);
     ss << "</table></body></html>" << std::endl;
     response.add_header("Content-Type", "text/html");
+    response.set_content_length(ss.str().length());
+    response.respond(HttpResponseStatus::kHttpResponseOK);
     if (request.method() != HTTP_HEAD) {
         response.write_string(ss.str());
-    } else {
-        response.set_content_length(ss.str().length());
     }
-    response.respond(HttpResponseStatus::kHttpResponseOK);
 }
 
 void
@@ -482,8 +476,9 @@ default_resp:
     ss << "<html><head><title>" << error.reason << "</title></head><body>"
        << "<h1>" << error.status_code << " - " << error.reason << "</h1>"
        << "</body></html>" << std::endl;
-    response.write_string(ss.str());
+    response.set_content_length(ss.str().length());
     response.respond(error);
+    response.write_string(ss.str());
     return;
 }
 
@@ -493,6 +488,7 @@ StaticHttpHandler::handle_request(HttpRequest& request, HttpResponse& response)
     std::string filename = HttpRequest::url_decode(request.path());
     filename = remove_path_dots(filename);
 
+    response.disable_prepare_buffer();
     if (request.method() != HTTP_GET && request.method() != HTTP_POST
         && request.method() != HTTP_HEAD) {
         respond_error(HttpResponseStatus::kHttpResponseBadRequest, request,
@@ -523,23 +519,11 @@ StaticHttpHandler::handle_request(HttpRequest& request, HttpResponse& response)
     }
 }
 
-static void
-static_handler_module_init()
-{
-    static StaticHttpHandlerFactory static_handler_factory;
-    BaseHttpHandlerFactory::register_factory(&static_handler_factory);
 }
 
-static struct StaticHandlerModule : public Module
+extern "C" void
+tube_http_static_module_init(void)
 {
-    StaticHandlerModule() {
-        this->on_initialize = static_handler_module_init;
-        this->name = "static_handler";
-        this->vendor = "tube server";
-        this->description = "static file handler";
-    }
-} static_handler_module;
-
-EXPORT_MODULE_STATIC(static_handler_module);
-
+    static tube::StaticHttpHandlerFactory static_handler_factory;
+    tube::BaseHttpHandlerFactory::register_factory(&static_handler_factory);
 }

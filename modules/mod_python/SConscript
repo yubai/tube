@@ -1,0 +1,41 @@
+# -*- mode: python -*-
+from SCons import SConf
+
+source = ['python_handler.cc',
+          'pytube.c',
+          'python.mod.c']
+
+Import('env', 'GetOS')
+
+env = env.Clone()
+env.Append(CPPPATH=['../../'])
+env.Append(LIBPATH=['../../'])
+
+def CheckPython(ctx):
+    ctx.Message('Checking for Python library... ')
+    ret = ctx.TryAction('python-config')
+    ctx.Result(bool(ret))
+    if ret:
+        ctx.env.ParseConfig('python-config --includes --libs')
+    return ret
+
+def CheckCython(ctx):
+    ctx.Message('Checking for Cython... ')
+    ret = ctx.TryAction('cython')
+    ctx.Result(bool(ret))
+    return ret
+
+if not env.GetOption('clean'):
+    conf = env.Configure(custom_tests={'CheckPython': CheckPython,
+                                       'CheckCython': CheckCython})
+    if not conf.CheckPython() or not conf.CheckCython():
+        Exit(1)
+    env = conf.Finish()
+
+env.Command('pytube.c', 'pytube.pyx', 'cython $SOURCE -o $TARGET')
+libmodpython = env.SharedLibrary('../modpython', source=source, LIBS=env['LIBS'] + ['tube', 'tube-web'])
+
+# Install
+env.Alias('install', [
+        env.Install('$LIBDIR/tube/', libmodpython)
+        ])

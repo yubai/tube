@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <dlfcn.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/types.h>
 #include <dirent.h>
 
@@ -14,7 +15,7 @@ static tube_module_t* modules[MAX_MODULE_CNT];
 tube_module_t*
 tube_module_load(const char* filename)
 {
-    void* handle = dlopen(filename, RTLD_NOW);
+    void* handle = dlopen(filename, RTLD_NOW | RTLD_GLOBAL);
     void* sym_handle = NULL;
     tube_module_t* module_ptr = NULL;
 
@@ -81,8 +82,14 @@ tube_module_load_dir(const char* dirname)
     char path[MAX_PATH_LEN];
     struct dirent* ent = NULL;
     while ((ent = readdir(dir))) {
-        snprintf(path, MAX_PATH_LEN, "%s/%s", dirname, ent->d_name);
-        tube_module_register_module(tube_module_load(path));
+        const char* fname = ent->d_name;
+        tube_module_t* module = NULL;
+        if (fname[0] == '.') continue;
+        snprintf(path, MAX_PATH_LEN, "%s/%s", dirname, fname);
+        module = tube_module_load(path);
+        if (module) {
+            tube_module_register_module(module);
+        }
     }
     closedir(dir);
     return 1;

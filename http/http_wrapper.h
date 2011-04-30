@@ -126,6 +126,7 @@ public:
     // write it into the prepared buffer
     virtual ssize_t write_data(const byte* ptr, size_t size);
     virtual void respond(const HttpResponseStatus& status);
+    void respond_with_message(const HttpResponseStatus& status);
     virtual void reset();
 };
 

@@ -105,7 +105,7 @@ HttpHandlerStage::process_task(Connection* conn)
                 break;
         }
         if (!response.is_responded()) {
-            response.respond(
+            response.respond_with_message(
                 HttpResponseStatus::kHttpResponseServiceUnavailable);
         }
         response.reset();

@@ -20,9 +20,9 @@ struct _tube_module_t
     const char*        vendor;
     const char*        description;
 
-    void (*on_load) (); /* for dynamic modules only */
-    void (*on_initialize) ();
-    void (*on_finalize) ();
+    void (*on_load) (void); /* for dynamic modules only */
+    void (*on_initialize) (void);
+    void (*on_finalize) (void);
 };
 
 tube_module_t* tube_module_load(const char* filename);
@@ -35,8 +35,9 @@ void           tube_module_finalize_all();
 #define EXPORT_MODULE_PTR __export_module_ptr
 #define EXPORT_MODULE_PTR_NAME "__export_module_ptr"
 
-#define EXPORT_MODULE(module_obj)                       \
-    tube_module_t* EXPORT_MODULE_PTR = &(module_obj);   \
+#define EXPORT_MODULE(module_obj)                                       \
+    tube_module_t* EXPORT_MODULE_PTR __attribute__ ((visibility("default"))) \
+    = &(module_obj);                                                    \
 
 #define EXPORT_MODULE_STATIC(module_obj)                                \
     static void __static_module_register() __attribute__((constructor)); \

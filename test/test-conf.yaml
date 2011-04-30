@@ -23,10 +23,19 @@ handlers:
     allow_index: false
     max_cache_entry: 64
     max_entry_size: 16384
+  - name: python_test
+    module: python
+    module_name: test_python
+    module_path: /home/mike/workspace/tube/test
+    class_name: TestHandler
 
 host:
   - domain: default
     url-rules:
+      - type: prefix
+        prefix: /python
+        chain:
+          - python_test
       - type: prefix
         prefix: /index_theme
         chain: 

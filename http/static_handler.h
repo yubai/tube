@@ -55,7 +55,7 @@ public:
     virtual std::string module_name() const {
         return std::string("static");
     }
-    virtual std::string vender_name() const {
+    virtual std::string vendor_name() const {
         return std::string("tube");
     }
 };
