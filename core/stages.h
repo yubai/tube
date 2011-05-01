@@ -18,7 +18,7 @@ protected:
     Scheduler* sched_;
     Pipeline&  pipeline_;
 protected:
-    Stage(std::string name);
+    Stage(const std::string& name);
     virtual ~Stage() {}
 
     virtual int process_task(Connection* conn) { return 0; };

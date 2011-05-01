@@ -6,6 +6,7 @@ handler_stage_pool_size: 4
 listen_queue_size: 32
 
 recycle_threshold: 16
+enable_cork: false
 
 idle_timeout: 15
 

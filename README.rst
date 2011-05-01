@@ -9,7 +9,7 @@ Tube Web Server aims to be a scalable, flexible, extensible Web Server.  It was 
 Platform Support
 ----------------
 
-Currently, Tube Web Server is under heavy developments.  The primary platform to support is Linux 2.6.  FreeBSD 6+ and Solaris 10+ is also supported, but under heavy developments currently.
+Currently, Tube Web Server is under heavy developments.  The primary platform to support is Linux 2.6.  FreeBSD 6+ and Solaris 10+ are also supported, but under heavy developments currently.
 
 Build
 -----

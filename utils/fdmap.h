@@ -6,6 +6,7 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <boost/shared_array.hpp>
+#include <list>
 #include <cassert>
 
 namespace tube {
@@ -25,7 +26,7 @@ get_fdmap_max_size()
         return 32767;
     } else {
         return (size_t) lmt.rlim_cur;
-    }    
+    }
 }
 
 template <typename T>

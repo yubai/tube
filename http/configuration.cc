@@ -5,6 +5,7 @@
 #include "http/configuration.h"
 #include "http/http_stages.h"
 #include "utils/logger.h"
+#include "utils/misc.h"
 
 namespace tube {
 
@@ -24,6 +25,10 @@ HandlerConfig::load_handler(const Node& subdoc)
     subdoc["name"] >> name;
     subdoc["module"] >> module;
     BaseHttpHandler* handler = create_handler_instance(name, module);
+    if (handler == NULL) {
+        LOG(ERROR, "Cannot create handler instance %s", module.c_str());
+        return;
+    }
     for (YAML::Iterator it = subdoc.begin(); it != subdoc.end(); ++it) {
         std::string key, value;
         it.first() >> key;
@@ -276,6 +281,9 @@ ServerConfig::load_config_file(const char* filename)
             } else if (key == "idle_timeout") {
                 it.second() >> value;
                 HttpConnectionFactory::kDefaultTimeout = atoi(value.c_str());
+            } else if (key == "enable_cork") {
+                it.second() >> value;
+                HttpConnectionFactory::kCorkEnabled = utils::parse_bool(value);
             }
             LOG(INFO, "ignore unsupported key %s", key.c_str());
         }

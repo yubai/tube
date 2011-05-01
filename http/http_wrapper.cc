@@ -188,7 +188,7 @@ HttpRequest::method_string() const
 }
 
 bool
-HttpRequest::has_header(std::string key) const
+HttpRequest::has_header(const std::string& key) const
 {
     const HttpHeaderEnumerate& headers = request_.headers;
     for (size_t i = 0; i < headers.size(); i++) {
@@ -199,7 +199,7 @@ HttpRequest::has_header(std::string key) const
 }
 
 std::vector<std::string>
-HttpRequest::find_header_values(std::string key) const
+HttpRequest::find_header_values(const std::string& key) const
 {
     const HttpHeaderEnumerate& headers = request_.headers;
     std::vector<std::string> result;
@@ -211,7 +211,7 @@ HttpRequest::find_header_values(std::string key) const
 }
 
 std::string
-HttpRequest::find_header_value(std::string key) const
+HttpRequest::find_header_value(const std::string& key) const
 {
     const HttpHeaderEnumerate& headers = request_.headers;
     for (size_t i = 0; i < headers.size(); i++) {
@@ -335,7 +335,7 @@ http_url_decode(const std::string& url)
 }
 
 std::string
-HttpRequest::url_decode(std::string url)
+HttpRequest::url_decode(const std::string& url)
 {
     return http_url_decode(url);
 }

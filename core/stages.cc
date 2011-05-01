@@ -14,7 +14,7 @@ using namespace tube::utils;
 
 namespace tube {
 
-Stage::Stage(std::string name)
+Stage::Stage(const std::string& name)
     : pipeline_(Pipeline::instance())
 {
     sched_ = NULL;

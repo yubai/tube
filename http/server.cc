@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include <unistd.h>
+#include <signal.h>
 
 #include "http/static_handler.h"
 #include "http/http_wrapper.h"
@@ -115,6 +116,13 @@ load_modules()
 
 using namespace tube;
 
+static void
+on_quit_signal(int sig)
+{
+    puts("here");
+    exit(0);
+}
+
 int
 main(int argc, char* argv[])
 {
@@ -148,6 +156,8 @@ main(int argc, char* argv[])
         server.initialize_stages();
         server.start_all_threads();
         server.listen(cfg.listen_queue_size());
+        puts("settingup signal");
+        ::signal(SIGINT, on_quit_signal);
         server.main_loop();
     } catch (utils::SyscallException ex) {
         fprintf(stderr, "Cannot start server: %s\n", ex.what());

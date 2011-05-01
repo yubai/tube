@@ -18,7 +18,7 @@ class FilenameRequest : public Request
 public:
     FilenameRequest(Connection* conn) : Request(conn) {}
 
-    void add_filename(std::string str) { filenames_.push_back(str); }
+    void add_filename(const std::string& str) { filenames_.push_back(str); }
     bool empty() const { return filenames_.empty(); }
 
     std::string next_filename() {

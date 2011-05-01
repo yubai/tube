@@ -41,6 +41,7 @@ HttpRequestData::HttpRequestData()
     : method(0), content_length(0), transfer_encoding(0), version_major(0),
       version_minor(0), keep_alive(false)
 {
+    clear();
 }
 
 const char*
@@ -78,6 +79,17 @@ HttpRequestData::method_string() const
     default:
         return "";
     }
+}
+
+void
+HttpRequestData::clear()
+{
+    headers.clear();
+    path.clear();
+    uri.clear();
+    query_string.clear();
+    fragment.clear();
+    chunk_buffer.clear();
 }
 
 HttpConnection::HttpConnection(int fd)
@@ -197,8 +209,8 @@ HttpConnection::finish_header_line()
 {
     tmp_request_.headers.push_back(
         HttpHeaderItem(last_header_key_, last_header_value_));
-    last_header_key_ = "";
-    last_header_value_ = "";
+    last_header_key_.clear();
+    last_header_value_.clear();
 }
 
 void
@@ -226,7 +238,7 @@ HttpConnection::finish_parse()
     tmp_request_.url_rule = vhost_cfg.match_uri(host, tmp_request_);
 
     requests_.push_back(tmp_request_);
-    tmp_request_ = HttpRequestData();
+    tmp_request_.clear();
     last_header_key_.clear();
     last_header_value_.clear();
 }

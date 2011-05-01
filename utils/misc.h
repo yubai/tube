@@ -57,7 +57,7 @@ struct PtrHashFunc
 };
 
 bool      ignore_compare(const std::string& p, const std::string& q);
-bool      parse_bool(std::string str);
+bool      parse_bool(const std::string str);
 
 }
 }

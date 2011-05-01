@@ -51,7 +51,7 @@ class FileOpenError : public SyscallException
 {
     std::string filename_;
 public:
-    FileOpenError(std::string filename)
+    FileOpenError(const std::string& filename)
         : SyscallException(), filename_(filename) {}
 
     virtual ~FileOpenError() throw() {}

@@ -18,6 +18,7 @@ Connection::Connection(int sock)
     timeout = 0; // default no timeout
     prio = 0;
     inactive = false;
+    cork_enabled = true;
     last_active = time(NULL);
 
     // set nodelay
@@ -35,6 +36,7 @@ Connection::active_close()
 void
 Connection::set_cork()
 {
+    if (!cork_enabled) return;
 #ifdef __linux__
     int state = 1;
     if (setsockopt(fd, IPPROTO_TCP, TCP_CORK, &state, sizeof(state)) < 0) {
@@ -46,6 +48,7 @@ Connection::set_cork()
 void
 Connection::clear_cork()
 {
+    if (!cork_enabled) return;
 #ifdef __linux__
     int state = 0;
     if (setsockopt(fd, IPPROTO_TCP, TCP_CORK, &state, sizeof(state)) < 0) {
@@ -117,8 +120,11 @@ Scheduler::~Scheduler()
 {
 }
 
+size_t QueueScheduler::kMemoryPoolSize = 320 << 10;
+
 QueueScheduler::QueueScheduler(bool suppress_connection_lock)
-    : Scheduler(), suppress_connection_lock_(suppress_connection_lock)
+    : Scheduler(), pool_(kMemoryPoolSize), list_(pool_),
+      suppress_connection_lock_(suppress_connection_lock)
 {
 }
 
@@ -136,9 +142,7 @@ QueueScheduler::add_task(Connection* conn)
         return;
     }
     bool need_notify = (list_.size() == 0);
-    list_.push_back(conn);
-    NodeList::iterator node = list_.end();
-    nodes_.insert(conn->fd, --node);
+    nodes_.insert(conn->fd, list_.push_back(conn));
 
     lk.unlock();
     if (need_notify) {

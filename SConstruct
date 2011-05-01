@@ -23,26 +23,26 @@ def CompilerMTOption():
     else:
         return ''
 
-essential_cflags = ' -pipe -Wall'
+essential_cflags = '-pipe -Wall'
 cflags = '-g -DLOG_ENABLED'
 inc_path = ['.']
+
+profile = (ARGUMENTS.get('profile', 0) == '1')
 
 if GetOS() == 'FreeBSD':
     inc_path.append('/usr/local/include')
 
-if ARGUMENTS.get('release', 0) == '1':
-    cflags = '-Os -mtune=generic'
+if profile:
+    cflags = '-O2 -mtune=generic -g -lprofiler'
 
-env = Environment(ENV=os.environ, CFLAGS=cflags, CXXFLAGS=cflags,
-                  CPPPATH=inc_path)
-
+env = Environment(ENV=os.environ, CPPPATH=inc_path)
 opts.Update(env)
 
+env.MergeFlags(cflags)
 PassEnv('CFLAGS', 'CFLAGS')
 PassEnv('CXXFLAGS', 'CXXFLAGS')
 PassEnv('LDFLAGS', 'LINKFLAGS')
-
-env.Append(CFLAGS=essential_cflags + CompilerMTOption(), CXXFLAGS=essential_cflags + CompilerMTOption())
+env.MergeFlags([essential_cflags, CompilerMTOption()])
 
 if GetOption('prefix') is not None:
     env['PREFIX'] = GetOption('prefix')
@@ -54,5 +54,11 @@ if GetOption('libdir') is not None:
 opts.Save('configure.conf', env)
 
 Export('opts', 'env', 'GetOS')
-SConscript('./SConscript', variant_dir='build', duplicate=0)
-SConscript('./modules/mod_python/SConscript', variant_dir='build/modules/mod_python', duplicate=0)
+
+build_dir = 'build'
+if profile:
+    build_dir = 'profile'
+
+SConscript('./SConscript', variant_dir=build_dir, duplicate=0)
+SConscript('./modules/mod_python/SConscript', variant_dir=build_dir + '/modules/mod_python', duplicate=0)
+

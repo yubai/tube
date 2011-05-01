@@ -14,7 +14,8 @@ struct HttpHeaderItem
     std::string key;
     std::string value;
 
-    HttpHeaderItem(std::string k, std::string v) : key(k), value(v) {}
+    HttpHeaderItem(const std::string k, const std::string v)
+        : key(k), value(v) {}
 };
 
 typedef std::vector<HttpHeaderItem> HttpHeaderEnumerate;
@@ -42,6 +43,7 @@ struct HttpRequestData
     HttpRequestData();
 
     const char* method_string() const;
+    void clear();
 };
 
 class HttpConnection : public Connection

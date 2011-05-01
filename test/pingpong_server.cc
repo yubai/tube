@@ -1,6 +1,7 @@
 #include <string>
 #include <iostream>
 #include <cassert>
+#include <signal.h>
 
 #include "utils/logger.h"
 #include "utils/misc.h"
@@ -55,6 +56,12 @@ public:
 
 static PingPongServer server;
 
+static void
+on_quit_signal(int sig)
+{
+    exit(0);
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -62,6 +69,7 @@ main(int argc, char *argv[])
     server.listen(128);
     server.start_all_threads();
 
+    ::signal(SIGINT, on_quit_signal);
     server.main_loop();
     return 0;
 }

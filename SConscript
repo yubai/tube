@@ -3,6 +3,7 @@ from SCons import SConf
 
 source = ['utils/logger.cc',
           'utils/misc.cc',
+          'utils/mempool.cc',
           'core/poller.cc',
           'core/buffer.cc',
           'core/pipeline.cc',
@@ -105,6 +106,8 @@ if not env.GetOption('clean'):
     for header in boost_headers:
         if not conf.CheckCXXHeader(header):
             Exit(1)
+    if not conf.CheckLibWithHeader('tcmalloc', 'google/tcmalloc.h', 'c'):
+        Exit(1)
     if not conf.CheckRagel():
         Exit(1)
     if not conf.SpecificConf():
@@ -112,9 +115,10 @@ if not env.GetOption('clean'):
     env = conf.Finish()
 
 env.Command('http/http_parser.c', 'http/http_parser.rl', 'ragel -s -G2 $SOURCE -o $TARGET')
+
 libtube = env.SharedLibrary('tube', source=source)
-libtube_web = env.SharedLibrary('tube-web', source=http_source)
-tube_server = env.Program('tube-server', source=http_server_source, LINKFLAGS=env['LINKFLAGS'] + ' -Lbuild', LIBS=['tube', 'tube-web'])
+libtube_web = env.SharedLibrary('tube-web', source=http_source, LIBS=[libtube])
+tube_server = env.Program('tube-server', source=http_server_source, LIBS=['tcmalloc', libtube, libtube_web])
 
 def GenTestProg(name, src):
     ldflags = [libtube, libtube_web]

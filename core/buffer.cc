@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <sys/uio.h>
 #include <cstdio>
+#include <google/tcmalloc.h>
 
 #include "core/buffer.h"
 #include "utils/exception.h"
@@ -15,7 +16,8 @@ namespace tube {
 const size_t Buffer::kPageSize = 8192;
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
-#define ALLOC_PAGE() ((byte*) malloc(kPageSize))
+#define ALLOC_PAGE() ((byte*) tc_malloc(kPageSize))
+#define FREE_PAGE(page) (tc_free(page))
 
 Buffer::Buffer()
 {
@@ -53,9 +55,9 @@ Buffer::CowInfo::CowInfo()
 
 Buffer::CowInfo::~CowInfo()
 {
-    free(extra_page_);
+    FREE_PAGE(extra_page_);
     for (PageList::iterator it = pages_.begin(); it != pages_.end(); ++it) {
-        free(*it);
+        FREE_PAGE(*it);
     }
 }
 
@@ -182,7 +184,7 @@ Buffer::pop(size_t pop_size)
     left_offset_ = res.rem;
     for (int i = 0; i < npage; i++) {
         if (cow_info_->pages_.size() > 1) {
-            free(cow_info_->pages_.front());
+            FREE_PAGE(cow_info_->pages_.front());
             cow_info_->pages_.pop_front();
         }
     }

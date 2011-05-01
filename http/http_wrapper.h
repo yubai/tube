@@ -17,7 +17,7 @@ protected:
 public:
     HttpRequest(Connection* conn, const HttpRequestData& request);
 
-    static std::string url_decode(std::string url);
+    static std::string url_decode(const std::string& url);
 
     std::string path() const { return request_.path; }
     std::string uri() const { return request_.uri; }
@@ -37,9 +37,9 @@ public:
     const HttpHeaderEnumerate& headers() const { return request_.headers; }
     HttpHeaderEnumerate& headers() { return request_.headers; }
 
-    bool has_header(std::string key) const;
-    std::vector<std::string> find_header_values(std::string key) const;
-    std::string find_header_value(std::string key) const;
+    bool has_header(const std::string& key) const;
+    std::vector<std::string> find_header_values(const std::string& key) const;
+    std::string find_header_value(const std::string& key) const;
     const UrlRuleItem* url_rule_item() const { return request_.url_rule; }
 
     // used for C wrapper only

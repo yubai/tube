@@ -67,7 +67,7 @@ StaticHttpHandler::load_param()
 
 // currently we only support single range
 static void
-parse_range(std::string range_desc, off64_t& offset, off64_t& length)
+parse_range(const std::string& range_desc, off64_t& offset, off64_t& length)
 {
     offset = 0;
     length = -1;
@@ -140,7 +140,7 @@ build_etag(const std::string& str)
 typedef std::vector<std::string> Tokens;
 
 static Tokens
-tokenize_string(std::string str, const char* delim)
+tokenize_string(const std::string& str, const char* delim)
 {
     std::vector<std::string> vec;
     std::string last;
@@ -161,19 +161,19 @@ tokenize_string(std::string str, const char* delim)
 }
 
 static Tokens
-tokenize_date(std::string date)
+tokenize_date(const std::string& date)
 {
     return tokenize_string(date, ", -");
 }
 
 static Tokens
-tokenize_time(std::string time)
+tokenize_time(const std::string& time)
 {
     return tokenize_string(time, ":");
 }
 
 static bool
-parse_digits(std::string number, const size_t max_ndigits, int& res)
+parse_digits(const std::string& number, const size_t max_ndigits, int& res)
 {
     if (number.length() > max_ndigits) return false;
     res = 0;
@@ -186,7 +186,7 @@ parse_digits(std::string number, const size_t max_ndigits, int& res)
 }
 
 static bool
-parse_month(std::string month, int& res)
+parse_month(const std::string& month, int& res)
 {
     static const char* months[] = {
         "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct",
@@ -203,7 +203,7 @@ parse_month(std::string month, int& res)
 }
 
 static bool
-parse_datetime(std::string datetime, struct tm* tm_struct)
+parse_datetime(const std::string& datetime, struct tm* tm_struct)
 {
     Tokens toks = tokenize_date(datetime);
 
@@ -463,7 +463,7 @@ StaticHttpHandler::respond_error(const HttpResponseStatus& error,
     if (file_desc < 0) {
         goto default_resp;
     }
-    if (fstat64(file_desc, &buf) < 0) {
+    if (::fstat64(file_desc, &buf) < 0) {
         ::close(file_desc);
         goto default_resp;
     }

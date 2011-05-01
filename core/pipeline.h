@@ -5,7 +5,6 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <list>
 #include <string>
 #include <set>
 
@@ -13,6 +12,7 @@
 
 #include "utils/fdmap.h"
 #include "utils/misc.h"
+#include "utils/list.h"
 #include "core/stream.h"
 #include "core/inet_address.h"
 
@@ -31,6 +31,7 @@ struct Connection
 
     int       fd;
     int       prio;
+    bool      cork_enabled;
     bool      inactive;
 
     InternetAddress address;
@@ -76,9 +77,11 @@ public:
 class QueueScheduler : public Scheduler
 {
 protected:
-    typedef std::list<Connection*> NodeList;
+    typedef utils::MemoryPool<utils::NoThreadSafePool> MemoryPool;
+    typedef utils::List<Connection*> NodeList;
     typedef utils::FDMap<NodeList::iterator> NodeMap;
 
+    MemoryPool pool_;
     NodeList  list_;
     NodeMap   nodes_;
 
@@ -87,6 +90,8 @@ protected:
 
     bool      suppress_connection_lock_;
 public:
+    static size_t kMemoryPoolSize;
+
     QueueScheduler(bool suppress_connection_lock = false);
     ~QueueScheduler();
 
@@ -116,7 +121,7 @@ class Pipeline : utils::Noncopyable
     StageMap       map_;
     utils::RWMutex mutex_;
 
-    PollInStage*             poll_in_stage_;
+    PollInStage*       poll_in_stage_;
     ConnectionFactory* factory_;
 
     Pipeline();

@@ -12,6 +12,7 @@ class HttpConnectionFactory : public ConnectionFactory
 {
 public:
     static int kDefaultTimeout;
+    static bool kCorkEnabled;
     virtual Connection* create_connection(int fd);
     virtual void        destroy_connection(Connection* conn);
 };

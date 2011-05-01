@@ -11,12 +11,14 @@
 namespace tube {
 
 int HttpConnectionFactory::kDefaultTimeout = 15;
+bool HttpConnectionFactory::kCorkEnabled = true;
 
 Connection*
 HttpConnectionFactory::create_connection(int fd)
 {
     Connection* conn = new HttpConnection(fd);
     conn->set_timeout(kDefaultTimeout);
+    conn->cork_enabled = kCorkEnabled;
     return conn;
 }
 

@@ -14,12 +14,10 @@ Wrapper::Wrapper(Connection* conn)
 Request::Request(Connection* conn)
   : Wrapper(conn)
 {
-    disable_poll();
 }
 
 Request::~Request()
 {
-    enable_poll();
 }
 
 ssize_t
@@ -85,7 +83,7 @@ Response::write_data(const byte* ptr, size_t sz)
 }
 
 ssize_t
-Response::write_string(std::string str)
+Response::write_string(const std::string& str)
 {
     return write_data((const byte*) str.c_str(), str.length());
 }
