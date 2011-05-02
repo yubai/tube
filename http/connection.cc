@@ -9,7 +9,8 @@ namespace tube {
 #define HTTP_CONNECTION(ptr) ((HttpConnection*) (ptr))
 
 #define DEF_CALLBACK_PROC(name, method)                                 \
-    static int name(http_parser* parser, const char* at, size_t length) \
+    static inline                                                       \
+    int name(http_parser* parser, const char* at, size_t length)        \
     {                                                                   \
         HTTP_CONNECTION(parser->data)->method(at, length);              \
         return 0;                                                       \
@@ -227,9 +228,12 @@ HttpConnection::finish_parse()
     LOG(DEBUG, "parsed packet with content-length: %llu\n",
         tmp_request_.content_length);
     std::string host = "default";
-    for (size_t i = 0; i < tmp_request_.headers.size(); i++) {
-        if (tmp_request_.headers[i].key == "Host") {
-            host = tmp_request_.headers[i].value;
+    if (parser_.version_major == 1 && parser_.version_minor == 1) {
+        for (size_t i = 0; i < tmp_request_.headers.size(); i++) {
+            if (tmp_request_.headers[i].key == "Host") {
+                host = tmp_request_.headers[i].value;
+                break;
+            }
         }
     }
     LOG(INFO, "[%s] %s from %s",  tmp_request_.method_string(),

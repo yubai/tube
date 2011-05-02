@@ -4,6 +4,7 @@
 #define _HTTP_WRAPPER_H_
 
 #include <string>
+#include <sstream>
 
 #include "http/connection.h"
 #include "core/wrapper.h"
@@ -106,8 +107,9 @@ protected:
     bool                is_responded_;
 
 public:
-    static const char* kHttpVersion;
-    static const char* kHttpNewLine;
+    static const std::string kHttpVersion;
+    static const std::string kHttpNewLine;
+    static const std::string kHtmlNewLine;
 
     HttpResponse(Connection* conn);
 
@@ -128,6 +130,41 @@ public:
     virtual void respond(const HttpResponseStatus& status);
     void respond_with_message(const HttpResponseStatus& status);
     virtual void reset();
+
+    // C++ wrappers to write_string
+    HttpResponse& operator<<(const std::string& str) {
+        write_string(str);
+        return (*this);
+    }
+
+    HttpResponse& operator<<(const char* str) {
+        write_string(str);
+        return (*this);
+    }
+
+    HttpResponse& operator<<(char ch) {
+        unsigned char uc = ch;
+        write_data(&uc, 1);
+        return (*this);
+    }
+
+    HttpResponse& operator<<(unsigned char ch) {
+        write_data(&ch, 1);
+        return (*this);
+    }
+
+    HttpResponse& operator<<(int num);
+    HttpResponse& operator<<(unsigned int num);
+    HttpResponse& operator<<(long num);
+    HttpResponse& operator<<(unsigned long num);
+    HttpResponse& operator<<(long long num);
+    HttpResponse& operator<<(unsigned long long num);
+
+    template <typename T>
+    HttpResponse& operator<<(const T& obj) {
+        std::stringstream ss; ss << obj; write_string(ss.str());
+        return (*this);
+    }
 };
 
 }

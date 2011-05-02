@@ -221,8 +221,9 @@ HttpRequest::find_header_value(const std::string& key) const
     return "";
 }
 
-const char* HttpResponse::kHttpVersion = "HTTP/1.1";
-const char* HttpResponse::kHttpNewLine = "\r\n";
+const std::string HttpResponse::kHttpVersion = "HTTP/1.1";
+const std::string HttpResponse::kHttpNewLine = "\r\n";
+const std::string HttpResponse::kHtmlNewLine = "\n";
 
 HttpResponse::HttpResponse(Connection* conn) : Response(conn)
 {
@@ -254,8 +255,9 @@ void
 HttpResponse::respond_with_message(const HttpResponseStatus& status)
 {
     reset();
-    write_string("<html><head><title>" + status.reason + "</title></head>");
-    write_string("<body><h1>" + status.reason + "</h1></body></html>");
+    *this << "<html><head><title>" << status.reason << "</title></head>"
+          << "<body><h1>" << status.reason << "</h1></body></html>";
+    add_header("Content-Type", "text/html");
     respond(status);
 }
 
@@ -266,19 +268,20 @@ HttpResponse::respond(const HttpResponseStatus& status)
     if (content_length_ < 0)
         set_content_length(prepare_buffer_.size());
 
-    std::stringstream response_text;
-    response_text << kHttpVersion << " " << status.status_code << " "
-                  << status.reason << kHttpNewLine;
+    // turn off the prepare buffer to use write_string
+    use_prepare_buffer_ = false;
+    *this << kHttpVersion << " " << status.status_code << " " << status.reason
+          << kHttpNewLine;
+
     for (size_t i = 0; i < headers_.size(); i++) {
         const HttpHeaderItem& item = headers_[i];
-        response_text << item.key << ": " << item.value << kHttpNewLine;
+        *this << item.key << ": " << item.value << kHttpNewLine;
     }
     if (has_content_length_) {
-        response_text << "Content-Length: " << content_length_ << kHttpNewLine;
+        *this << "Content-Length: " << content_length_ << kHttpNewLine;
     }
-    response_text << kHttpNewLine;
-    conn_->out_stream.append_data((const byte*) response_text.str().c_str(),
-                                  response_text.str().length());
+    *this << kHttpNewLine;
+
     if (prepare_buffer_.size() > 0) {
         // send the body if have any
         conn_->out_stream.append_buffer(prepare_buffer_);
@@ -295,6 +298,53 @@ HttpResponse::reset()
     has_content_length_ = true;
     use_prepare_buffer_ = true;
     is_responded_ = false;
+}
+
+static const size_t kMaxNumberLength = 32;
+
+template <typename T> HttpResponse&
+format_number(HttpResponse& response, const char* fmt, T num)
+{
+    char str[kMaxNumberLength];
+    snprintf(str, kMaxNumberLength, fmt, num);
+    response.write_string(str);
+    return response;
+}
+
+HttpResponse&
+HttpResponse::operator<<(int num)
+{
+    return format_number(*this, "%d", num);
+}
+
+HttpResponse&
+HttpResponse::operator<<(unsigned int num)
+{
+    return format_number(*this, "%u", num);
+}
+
+HttpResponse&
+HttpResponse::operator<<(long num)
+{
+    return format_number(*this, "%ld", num);
+}
+
+HttpResponse&
+HttpResponse::operator<<(unsigned long num)
+{
+    return format_number(*this, "%lu", num);
+}
+
+HttpResponse&
+HttpResponse::operator<<(long long num)
+{
+    return format_number(*this, "%lld", num);
+}
+
+HttpResponse&
+HttpResponse::operator<<(unsigned long long num)
+{
+    return format_number(*this, "%llu", num);
 }
 
 // decode and encode url

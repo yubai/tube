@@ -125,18 +125,6 @@ build_last_modified(const time_t* last_modified_time)
     return std::string(time_str);
 }
 
-static std::string
-build_etag(const std::string& str)
-{
-    u32 hash = 0x4F7E0912;
-    for (size_t i = 0; i < str.length(); i++) {
-        hash += str[i] << (i & 0x0F);
-    }
-    std::stringstream ss;
-    ss << std::hex << hash;
-    return ss.str();
-}
-
 typedef std::vector<std::string> Tokens;
 
 static Tokens
@@ -239,7 +227,6 @@ parse_datetime(const std::string& datetime, struct tm* tm_struct)
 bool
 StaticHttpHandler::validate_client_cache(const std::string& path,
                                          struct stat64 stat,
-                                         const std::string& etag,
                                          HttpRequest& request)
 {
     std::string modified_since =
@@ -251,11 +238,6 @@ StaticHttpHandler::validate_client_cache(const std::string& path,
         time_t orig_mtime = mktime(&gmt);
         time_t modified_time = mktime(&tm_struct);
         if (orig_mtime > modified_time) {
-            return false;
-        }
-        // try to check the etag
-        std::string etag = request.find_header_value("If-None-Match");
-        if (etag != "" && etag != build_etag(path)) {
             return false;
         }
         return true;
@@ -279,26 +261,6 @@ StaticHttpHandler::try_open_file(const std::string& path, HttpRequest& request,
     return file_desc;
 }
 
-static void
-send_client_cache_info(HttpResponse& response, time_t* mtime, std::string etag)
-{
-    response.add_header("Last-Modified", build_last_modified(mtime));
-    response.add_header("ETag", etag);
-}
-
-static void
-send_client_data(HttpResponse& response, byte* cached_entry, int file_desc,
-                 off64_t offset,
-                 off64_t length)
-{
-    if (cached_entry) {
-        ::close(file_desc);
-        response.write_data(cached_entry + offset, length);
-    } else {
-        response.write_file(file_desc, offset, length);
-    }
-}
-
 void
 StaticHttpHandler::respond_file_content(const std::string& path,
                                         struct stat64 stat,
@@ -308,7 +270,6 @@ StaticHttpHandler::respond_file_content(const std::string& path,
     byte* cached_entry = NULL;
     off64_t file_size = -1;
     std::string range_str;
-    std::string etag;
     HttpResponseStatus ret_status = HttpResponseStatus::kHttpResponseOK;
     off64_t offset = 0, length = -1;
 
@@ -323,9 +284,8 @@ StaticHttpHandler::respond_file_content(const std::string& path,
     }
 
     file_size = stat.st_size;
-    etag = build_etag(path);
 
-    if (validate_client_cache(path, stat, etag, request)) {
+    if (validate_client_cache(path, stat, request)) {
         response.respond(HttpResponseStatus::kHttpResponseNotModified);
         goto done;
     }
@@ -353,18 +313,62 @@ StaticHttpHandler::respond_file_content(const std::string& path,
         offset = 0;
         length = file_size;
     }
+
+    response.disable_prepare_buffer();
+    response.add_header("Last-Modified", build_last_modified(&stat.st_mtime));
     response.set_content_length(length);
-    send_client_cache_info(response, &stat.st_mtime, etag);
     response.respond(ret_status);
     if (request.method() != HTTP_HEAD) {
-        send_client_data(response, cached_entry, file_desc, offset, length);
+        if (cached_entry) {
+            ::close(file_desc);
+            response.write_data(cached_entry + offset, length);
+        } else {
+            response.write_file(file_desc, offset, length);
+        }
     }
 done:
     delete [] cached_entry;
 }
 
+class HttpResponseStream
+{
+    HttpResponse& response_;
+    bool          should_write_;
+public:
+    HttpResponseStream(HttpRequest& request, HttpResponse& response)
+        : response_(response), should_write_(true) {
+        if (request.method() == HTTP_HEAD) {
+            should_write_ = false;
+        }
+    }
+
+    template <typename T>
+    HttpResponseStream& operator<<(const T& obj) {
+        std::stringstream ss; ss << obj;
+        return (*this) << ss.str();
+    }
+
+    HttpResponseStream& operator<<(const std::string& str) {
+        do_write(str.c_str(), str.length());
+        return *this;
+    }
+
+    HttpResponseStream& operator<<(const char* str) {
+        do_write(str, strlen(str));
+        return *this;
+    }
+
+    void do_write(const char* str, size_t len) {
+        if (should_write_) {
+            response_.write_string(str);
+        } else {
+            response_.set_content_length(response_.content_length() + len);
+        }
+    }
+};
+
 static void
-add_directory_entry(std::stringstream& ss, std::string entry,
+add_directory_entry(HttpResponseStream& ss, std::string entry,
                     struct stat64* stat)
 {
     if (stat == NULL) {
@@ -386,7 +390,25 @@ add_directory_entry(std::stringstream& ss, std::string entry,
         strftime(time_str, MAX_TIME_LEN, "%F %T", &localtime);
         ss << "<td>" << time_str << "</td>";
     }
-    ss << "</tr>" << std::endl;
+    ss << "</tr>" << HttpResponse::kHtmlNewLine;
+}
+
+static void
+list_directory_html(HttpResponseStream& ss, const std::string& path, DIR* dirp)
+{
+    dirent* ent = NULL;
+    while ((ent = readdir(dirp))) {
+        std::string ent_name = ent->d_name;
+        std::string ent_path = path + "/" + ent->d_name;
+        struct stat64 buf;
+        if (ent_name == "." || ent_name == "..") {
+            continue;
+        }
+        if (::stat64(ent_path.c_str(), &buf) < 0) {
+            continue;
+        }
+        add_directory_entry(ss, ent_name, &buf);
+    }
 }
 
 void
@@ -401,44 +423,31 @@ StaticHttpHandler::respond_directory_list(const std::string& path,
                       request, response);
         return;
     }
-    std::stringstream ss;
+    HttpResponseStream ss(request, response);
+
     ss << "<html><head>"
-       << "<meta http-equiv=\"Content-Type\" content=\"text/html; charset="
+       << "<meta http-equiv=\"Content-Type\"  content=\"text/html; charset="
        << charset_ << "\">"
-       <<"<title>Directory List " << href_path << "</title>" << std::endl;
+       <<"<title>Directory List " << href_path << "</title>"
+       << HttpResponse::kHtmlNewLine;
+
     if (index_page_css_ != "") {
         ss << "<link rel=\"stylesheet\" type=\"text/css\" href=\""
-           << index_page_css_ << "\"/>" << std::endl;
+           << index_page_css_ << "\"/>" << HttpResponse::kHtmlNewLine;
     }
-    ss << "</head><body>" << std::endl
-       << "<h1>Index of " << href_path << "</h1>" << std::endl
-       << "<table>" << std::endl;
+    ss << "</head><body>" << HttpResponse::kHtmlNewLine
+       << "<h1>Index of " << href_path << "</h1>" << HttpResponse::kHtmlNewLine
+       << "<table>" << HttpResponse::kHtmlNewLine;
 
-    if (href_path != "/") {
-        add_directory_entry(ss, "..", NULL);
-    }
-    dirent* ent = NULL;
+    if (href_path != "/") add_directory_entry(ss, "..", NULL);
+
     ss << "<table>";
-    while ((ent = readdir(dirp))) {
-        std::string ent_name = ent->d_name;
-        std::string ent_path = path + "/" + ent->d_name;
-        struct stat64 buf;
-        if (ent_name == "." || ent_name == "..") {
-            continue;
-        }
-        if (::stat64(ent_path.c_str(), &buf) < 0) {
-            continue;
-        }
-        add_directory_entry(ss, ent_name, &buf);
-    }
+    list_directory_html(ss, path, dirp);
+    ss << "</table></body></html>" << HttpResponse::kHtmlNewLine;
     closedir(dirp);
-    ss << "</table></body></html>" << std::endl;
+
     response.add_header("Content-Type", "text/html");
-    response.set_content_length(ss.str().length());
     response.respond(HttpResponseStatus::kHttpResponseOK);
-    if (request.method() != HTTP_HEAD) {
-        response.write_string(ss.str());
-    }
 }
 
 void
@@ -446,20 +455,15 @@ StaticHttpHandler::respond_error(const HttpResponseStatus& error,
                                  HttpRequest& request,
                                  HttpResponse& response)
 {
-    LOG(WARNING, "%d with %s", error.status_code, request.uri().c_str());
-    response.add_header("Content-Type", "text/html");
-
-    std::stringstream ss;
-    std::string path;
+    std::stringstream path;
     int file_desc = -1;
     struct stat64 buf;
 
     if (error_root_ == "") {
         goto default_resp;
     }
-    ss << error_root_ << "/" << error.status_code << ".html";
-    path = ss.str();
-    file_desc = ::open(path.c_str(), O_RDONLY);
+    path << error_root_ << "/" << error.status_code << ".html";
+    file_desc = ::open(path.str().c_str(), O_RDONLY);
     if (file_desc < 0) {
         goto default_resp;
     }
@@ -467,19 +471,14 @@ StaticHttpHandler::respond_error(const HttpResponseStatus& error,
         ::close(file_desc);
         goto default_resp;
     }
+    response.disable_prepare_buffer();
+    response.add_header("Content-Type", "text/html");
     response.set_content_length(buf.st_size);
     response.respond(error);
     response.write_file(file_desc, 0, -1);
     return;
 default_resp:
-    ss.clear();
-    ss << "<html><head><title>" << error.reason << "</title></head><body>"
-       << "<h1>" << error.status_code << " - " << error.reason << "</h1>"
-       << "</body></html>" << std::endl;
-    response.set_content_length(ss.str().length());
-    response.respond(error);
-    response.write_string(ss.str());
-    return;
+    response.respond_with_message(error);
 }
 
 void
@@ -488,7 +487,6 @@ StaticHttpHandler::handle_request(HttpRequest& request, HttpResponse& response)
     std::string filename = HttpRequest::url_decode(request.path());
     filename = remove_path_dots(filename);
 
-    response.disable_prepare_buffer();
     if (request.method() != HTTP_GET && request.method() != HTTP_POST
         && request.method() != HTTP_HEAD) {
         respond_error(HttpResponseStatus::kHttpResponseBadRequest, request,

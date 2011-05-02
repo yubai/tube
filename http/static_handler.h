@@ -41,7 +41,7 @@ public:
                                 HttpResponse& response);
 private:
     bool validate_client_cache(const std::string& path, struct stat64 stat,
-                               const std::string& etag, HttpRequest& request);
+                               HttpRequest& request);
     int  try_open_file(const std::string& path, HttpRequest& request,
                        HttpResponse& response);
 };

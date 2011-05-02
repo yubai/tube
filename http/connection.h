@@ -14,7 +14,7 @@ struct HttpHeaderItem
     std::string key;
     std::string value;
 
-    HttpHeaderItem(const std::string k, const std::string v)
+    HttpHeaderItem(const std::string& k, const std::string& v)
         : key(k), value(v) {}
 };
 
