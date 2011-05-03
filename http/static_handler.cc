@@ -326,7 +326,7 @@ StaticHttpHandler::respond_file_content(const std::string& path,
         }
     }
 done:
-    if (cache_entry) {
+    if (cached_entry) {
         ::close(file_desc);
     }
     delete [] cached_entry;

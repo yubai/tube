@@ -13,8 +13,8 @@ env.Append(LIBPATH=['../../'])
 
 def CheckPython(ctx):
     ctx.Message('Checking for Python library... ')
-    ret = ctx.TryAction('python-config')
-    ctx.Result(bool(ret))
+    ret = ctx.TryAction('python-config --prefix')[0]
+    ctx.Result(ret)
     if ret:
         ctx.env.MergeFlags(['!python-config --includes',
                             '!python-config --libs'])
@@ -22,8 +22,8 @@ def CheckPython(ctx):
 
 def CheckCython(ctx):
     ctx.Message('Checking for Cython... ')
-    ret = ctx.TryAction('cython')
-    ctx.Result(bool(ret))
+    ret = ctx.TryAction('cython -V')[0]
+    ctx.Result(ret)
     return ret
 
 if not env.GetOption('clean'):
