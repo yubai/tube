@@ -154,7 +154,6 @@ void
 QueueScheduler::reschedule()
 {
     if (!suppress_connection_lock_) {
-        utils::Lock lk(mutex_);
         cond_.notify_all();
     }
 }

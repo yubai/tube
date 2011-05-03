@@ -320,13 +320,15 @@ StaticHttpHandler::respond_file_content(const std::string& path,
     response.respond(ret_status);
     if (request.method() != HTTP_HEAD) {
         if (cached_entry) {
-            ::close(file_desc);
             response.write_data(cached_entry + offset, length);
         } else {
             response.write_file(file_desc, offset, length);
         }
     }
 done:
+    if (cache_entry) {
+        ::close(file_desc);
+    }
     delete [] cached_entry;
 }
 
