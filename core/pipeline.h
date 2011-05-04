@@ -21,9 +21,6 @@ namespace tube {
 
 struct Connection
 {
-    volatile uint32_t last_active;
-    volatile uint32_t timeout;
-
     // poller specific data, might not be used
     union {
         int   data_int;
@@ -31,7 +28,7 @@ struct Connection
     } poller_spec;
 
     int       fd;
-    int       prio;
+    int       timeout;
     bool      cork_enabled;
     bool      inactive;
 
@@ -45,7 +42,8 @@ struct Connection
     utils::Mutex mutex;
     long         owner;
 
-    bool close_after_finish;
+    bool   close_after_finish;
+    time_t last_active;
 
     bool trylock();
     void lock();
@@ -112,37 +110,6 @@ struct ConnectionFactory
 public:
     virtual Connection* create_connection(int fd);
     virtual void        destroy_connection(Connection* conn);
-};
-
-class Timer
-{
-public:
-    typedef time_t Unit;
-    typedef void* Context;
-    typedef boost::function<bool (Context)> Callback;
-
-    static int kUnitGrand;
-
-    bool set(Unit unit, Context ctx, Callback call);
-    void replace(Unit unit, Context ctx, Callback call);
-    bool remove(Unit unit, Context ctx, Callback& call);
-    bool query(Unit unit, Context ctx, Callback& call);
-
-    void process_callbacks();
-    Unit current_timer_unit() const;
-
-private:
-    struct TimerKey {
-        Unit unit;
-        Context ctx;
-        bool operator<(const TimerKey& rhs) const;
-        TimerKey(Unit timerunit, Context context)
-            : unit(timerunit), ctx(context) {}
-    };
-    typedef std::map<TimerKey, Callback> TimerTree;
-    TimerTree rbtree_;
-
-    bool invoke_callback(TimerTree::iterator it);
 };
 
 class PollInStage;

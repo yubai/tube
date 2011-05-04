@@ -30,7 +30,7 @@ public:
     virtual bool remove_fd(int fd);
 };
 
-KqueuePoller::KqueuePoller() 
+KqueuePoller::KqueuePoller()
 {
     kqueue_ = kqueue();
     if (kqueue_ < 0) {
@@ -47,8 +47,8 @@ static int
 build_kqueue_filter(PollerEvent evt)
 {
     int res = 0;
-    if (evt & POLLER_EVENT_READ) res |= EVFILT_READ;
-    if (evt & POLLER_EVENT_WRITE) res |= EVFILT_WRITE;
+    if (evt & kPollerEventRead) res |= EVFILT_READ;
+    if (evt & kPollerEventWrite) res |= EVFILT_WRITE;
     return res;
 }
 
@@ -56,10 +56,10 @@ static PollerEvent
 build_poller_event(short filter, u_short events)
 {
     PollerEvent evt = 0;
-    if (filter & EVFILT_READ) evt |= POLLER_EVENT_READ;
-    if (filter & EVFILT_WRITE) evt |= POLLER_EVENT_WRITE;
-    if (events & EV_EOF) evt |= POLLER_EVENT_HUP;
-    if (events & EV_ERROR) evt |= POLLER_EVENT_ERROR;
+    if (filter & EVFILT_READ) evt |= kPollerEventRead;
+    if (filter & EVFILT_WRITE) evt |= kPollerEventWrite;
+    if (events & EV_EOF) evt |= kPollerEventHup;
+    if (events & EV_ERROR) evt |= kPollerEventError;
     return evt;
 }
 
@@ -118,7 +118,7 @@ KqueuePoller::handle_event(int timeout) throw ()
             }
         }
         if (!pre_handler_.empty())
-            pre_handler_(*this);
+            pre_handler_();
         if (!handler_.empty()) {
             for (int i = 0; i < nfds; i++) {
                 conn = (Connection*) kevents[i].udata;
@@ -127,7 +127,7 @@ KqueuePoller::handle_event(int timeout) throw ()
             }
         }
         if (!post_handler_.empty())
-            post_handler_(*this);
+            post_handler_();
     }
     free(kevents);
 }

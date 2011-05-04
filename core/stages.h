@@ -42,9 +42,8 @@ class PollInStage : public Stage
 
     std::vector<Poller*> pollers_;
     size_t               current_poller_;
-
-    std::string poller_name_;
-    int timeout_;
+    std::string          poller_name_;
+    int                  timeout_;
 
     Stage* parser_stage_;
     Stage* recycle_stage_;
@@ -64,22 +63,13 @@ public:
     virtual void main_loop();
 
     void cleanup_connection(Connection* conn);
-friend class IdleScanner;
 private:
-    void read_connection(Connection* conn);
+    void cleanup_connection(Poller& poller, Connection* conn);
+    void read_connection(Poller& poller, Connection* conn);
+    bool cleanup_idle_connection_callback(Poller& poller, void* ptr);
     void add_poll(Poller* poller);
-    void handle_connection(Connection* conn, PollerEvent evt);
-    void post_handle_connection(IdleScanner& idle_scanner, Poller& poller);
-};
-
-class IdleScanner
-{
-    uint32_t last_scan_time_;
-    int      scan_timeout_;
-    PollInStage& stage_;
-public:
-    IdleScanner(int scan_timeout, PollInStage& stage);
-    void scan_idle_connection(Poller& poller);
+    void handle_connection(Poller& poller, Connection* conn, PollerEvent evt);
+    void post_handle_connection(Poller& poller);
 };
 
 class WriteBackStage : public Stage

@@ -9,6 +9,7 @@
 
 #include "utils/misc.h"
 #include "utils/fdmap.h"
+#include "core/timer.h"
 
 namespace tube {
 
@@ -16,16 +17,16 @@ class Connection;
 
 typedef unsigned short PollerEvent;
 
-static const PollerEvent POLLER_EVENT_READ  = 1;
-static const PollerEvent POLLER_EVENT_WRITE = 2;
-static const PollerEvent POLLER_EVENT_ERROR = 4;
-static const PollerEvent POLLER_EVENT_HUP   = 8;
+static const PollerEvent kPollerEventRead  = 1;
+static const PollerEvent kPollerEventWrite = 2;
+static const PollerEvent kPollerEventError = 4;
+static const PollerEvent kPollerEventHup   = 8;
 
 class Poller : public utils::Noncopyable
 {
 public:
     typedef boost::function<void (Connection*, PollerEvent)> EventCallback;
-    typedef boost::function<void (Poller&)> PollerCallback;
+    typedef boost::function<void ()> PollerCallback;
     typedef utils::FDMap<Connection*> FDMap;
 
     Poller() ;
@@ -50,7 +51,10 @@ public:
 
     bool add_fd(int fd, Connection* conn, PollerEvent evt);
     bool remove_fd(int fd);
+
+    Timer& timer() { return timer_; }
 protected:
+    Timer          timer_;
     FDMap          fds_;
     // handler when events happened
     EventCallback  handler_;

@@ -45,7 +45,7 @@ public:
     virtual bool poll_remove_fd(int fd);
 };
 
-PortPoller::PortPoller() 
+PortPoller::PortPoller()
     : Poller()
 {
     port_ = ::port_create();
@@ -63,10 +63,10 @@ static int
 build_port_event(PollerEvent evt)
 {
     int res = 0;
-    if (evt & POLLER_EVENT_READ) res |= POLLIN;
+    if (evt & kPollerEventRead) res |= POLLIN;
     if (evt & POLLER_EVENT_WRITE) res |= POLLOUT;
-    if (evt & POLLER_EVENT_ERROR) res |= POLLERR;
-    if (evt & POLLER_EVENT_HUP) res |= POLLHUP;
+    if (evt & kPollerEventError) res |= POLLERR;
+    if (evt & kPollerEventHup) res |= POLLHUP;
     return res;
 }
 
@@ -74,10 +74,10 @@ static PollerEvent
 build_poller_event(int events)
 {
     PollerEvent evt = 0;
-    if (events & POLLIN) evt |= POLLER_EVENT_READ;
-    if (events & POLLOUT) evt |= POLLER_EVENT_WRITE;
-    if (events & POLLERR) evt |= POLLER_EVENT_ERROR;
-    if (events & POLLHUP) evt |= POLLER_EVENT_HUP;
+    if (events & POLLIN) evt |= kPollerEventRead;
+    if (events & POLLOUT) evt |= kPollerEventWrite;
+    if (events & POLLERR) evt |= kPollerEventError;
+    if (events & POLLHUP) evt |= kPollerEventHup;
     return evt;
 }
 
@@ -108,7 +108,7 @@ PortPoller::poll_remove_fd(int fd)
 #define MAX_EVENT_PER_GET 1024
 
 void
-PortPoller::handle_event(int timeout) 
+PortPoller::handle_event(int timeout)
 {
     port_event_t* port_evt = (port_event_t*)
         malloc(sizeof(port_event_t) * MAX_EVENT_PER_GET);
@@ -149,7 +149,7 @@ PortPoller::handle_event(int timeout)
             nfds = 1;
         }
         if (!pre_handler_.empty())
-            pre_handler_(*this);
+            pre_handler_();
         if (!handler_.empty()) {
             for (uint_t i = 0; i < nfds; i++) {
                 if (port_evt[i].portev_source != PORT_SOURCE_FD) {
@@ -160,7 +160,7 @@ PortPoller::handle_event(int timeout)
             }
         }
         if (!post_handler_.empty()) {
-            post_handler_(*this);
+            post_handler_();
         }
         // reassociate all the fds
         for (uint_t i = 0; i < nfds; i++) {

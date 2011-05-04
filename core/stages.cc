@@ -66,47 +66,6 @@ Stage::start_thread()
     Thread th(boost::bind(&Stage::main_loop, this));
 }
 
-IdleScanner::IdleScanner(int scan_timeout, PollInStage& stage)
-    : scan_timeout_(scan_timeout), stage_(stage)
-{
-    last_scan_time_ = time(NULL);
-}
-
-void
-IdleScanner::scan_idle_connection(Poller& poller)
-{
-    if (!stage_.mutex_.try_lock()) {
-        return;
-    }
-
-    uint32_t current_time = time(NULL);
-    int idled_time = current_time - last_scan_time_;
-    if (idled_time < scan_timeout_) {
-        stage_.mutex_.unlock();
-        return;
-    }
-    std::vector<Connection*> timeout_connections;
-    for (Poller::FDMap::iterator it = poller.begin(); it != poller.end();
-         ++it) {
-        Connection* conn =  *it;
-        // on most architecture, accessing two words should be atomic.
-        if (conn->timeout <= 0)
-            continue;
-        if (current_time - conn->last_active > conn->timeout) {
-            timeout_connections.push_back(conn);
-        }
-    }
-    stage_.mutex_.unlock();
-    for (size_t i = 0; i < timeout_connections.size(); i++) {
-         // timeout: this connection has been idle for a long time.
-        Connection* conn = timeout_connections[i];
-        LOG(INFO, "connection %d has timeout", conn->fd);
-        stage_.cleanup_connection(conn);
-    }
-
-    last_scan_time_ = current_time;
-}
-
 int PollInStage::kDefaultTimeout = 10;
 
 PollInStage::PollInStage()
@@ -137,18 +96,30 @@ PollInStage::sched_add(Connection* conn)
 {
     utils::Lock lk(mutex_);
     current_poller_ = (current_poller_ + 1) % pollers_.size();
-    return pollers_[current_poller_]->add_fd(
-        conn->fd, conn, POLLER_EVENT_READ | POLLER_EVENT_ERROR
-        | POLLER_EVENT_HUP);
+    Poller& poller = *pollers_[current_poller_];
+    Timer::Unit current_unit = Timer::current_timer_unit();
+    Timer::Unit future_unit = current_unit
+        + Timer::timer_unit_from_time(conn->timeout);
+    Timer::Callback callback = boost::bind(
+        &PollInStage::cleanup_idle_connection_callback, this,
+        boost::ref(poller), _1);
+
+    poller.timer().replace(future_unit, conn, callback);
+    return poller.add_fd(
+        conn->fd, conn, kPollerEventRead | kPollerEventWrite | kPollerEventHup);
 }
 
 void
 PollInStage::sched_remove(Connection* conn)
 {
     utils::Lock lk(mutex_);
+    Timer::Unit oldfuture = conn->last_active
+        + Timer::timer_unit_from_time(conn->timeout);
     for (size_t i = 0; i < pollers_.size(); i++) {
-        if (pollers_[i]->remove_fd(conn->fd))
+        if (pollers_[i]->remove_fd(conn->fd)) {
+            pollers_[i]->timer().remove(oldfuture, conn);
             return;
+        }
     }
 }
 
@@ -177,12 +148,55 @@ PollInStage::cleanup_connection(Connection* conn)
 }
 
 void
-PollInStage::read_connection(Connection* conn)
+PollInStage::cleanup_connection(Poller& poller, Connection* conn)
+{
+    assert(conn);
+
+    if (!conn->inactive) {
+        Timer::Unit oldfuture = conn->last_active
+            + Timer::timer_unit_from_time(conn->timeout);
+        conn->inactive = true;
+        ::shutdown(conn->fd, SHUT_RDWR);
+        poller.remove_fd(conn->fd);
+        poller.timer().remove(oldfuture, conn);
+        recycle_stage_->sched_add(conn);
+    }
+}
+
+bool
+PollInStage::cleanup_idle_connection_callback(Poller& poller, void* ptr)
+{
+    Connection* conn = (Connection*) ptr;
+    if (!conn->trylock())
+        return false;
+    cleanup_connection(poller, conn);
+    return true;
+}
+
+void
+PollInStage::read_connection(Poller& poller, Connection* conn)
 {
     assert(conn);
 
     if (!conn->trylock()) // avoid lock contention
         return;
+
+    // update the timer
+    Timer& timer = poller.timer();
+    Timer::Unit current_unit = Timer::current_timer_unit();
+    if (conn->last_active != current_unit) {
+        Timer::Unit oldfuture = conn->last_active
+            + Timer::timer_unit_from_time(conn->timeout);
+        Timer::Unit future = current_unit
+            + Timer::timer_unit_from_time(conn->timeout);
+        Timer::Callback cb =
+            boost::bind(&PollInStage::cleanup_idle_connection_callback,
+                        this, boost::ref(poller), _1);
+        timer.remove(oldfuture, conn, cb);
+        timer.replace(future, conn, cb);
+        conn->last_active = current_unit;
+    }
+
     int nread;
     do {
         nread = conn->in_stream.read_into_buffer();
@@ -192,26 +206,34 @@ PollInStage::read_connection(Connection* conn)
     pipeline_.reschedule_all();
 
     if (nread < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        // send it to parser stage
         parser_stage_->sched_add(conn);
     } else {
-        cleanup_connection(conn);
+        cleanup_connection(poller, conn);
     }
 }
 
 void
-PollInStage::handle_connection(Connection* conn, PollerEvent evt)
+PollInStage::handle_connection(Poller& poller, Connection* conn,
+                               PollerEvent evt)
 {
-    if ((evt & POLLER_EVENT_HUP) || (evt & POLLER_EVENT_ERROR)) {
-        cleanup_connection(conn);
-    } else if (evt & POLLER_EVENT_READ) {
-        read_connection(conn);
+    if ((evt & kPollerEventHup) || (evt & kPollerEventError)) {
+        cleanup_connection(poller, conn);
+    } else if (evt & kPollerEventRead) {
+        read_connection(poller, conn);
     }
 }
 
 void
-PollInStage::post_handle_connection(IdleScanner& idle_scanner, Poller& poller)
+PollInStage::post_handle_connection(Poller& poller)
 {
-    idle_scanner.scan_idle_connection(poller);
+    Timer::Unit current_unit = Timer::current_timer_unit();
+    Timer& timer = poller.timer();
+    if (timer.last_executed_time() + Timer::timer_unit_from_time(timeout_)
+        <= current_unit) {
+        poller.timer().process_callbacks();
+        timer.set_last_executed_time(current_unit);
+    }
     recycle_stage_->sched_add(NULL); // add recycle barrier
 }
 
@@ -219,12 +241,12 @@ void
 PollInStage::main_loop()
 {
     Poller* poller = PollerFactory::instance().create_poller(poller_name_);
-    IdleScanner idle_scanner(timeout_, *this);
     Poller::EventCallback evthdl =
-        boost::bind(&PollInStage::handle_connection, this, _1, _2);
+        boost::bind(&PollInStage::handle_connection, this, boost::ref(*poller),
+                    _1, _2);
     Poller::PollerCallback posthdl =
-        boost::bind(&PollInStage::post_handle_connection, this, idle_scanner,
-                    _1);
+        boost::bind(&PollInStage::post_handle_connection, this,
+                    boost::ref(*poller));
 
     poller->set_post_handler(posthdl);
     poller->set_event_handler(evthdl);
@@ -254,7 +276,6 @@ WriteBackStage::process_task(Connection* conn)
     utils::set_socket_blocking(conn->fd, false);
 
     if (!out.is_done() && rs > 0) {
-        conn->last_active = time(NULL);
         sched_add(conn);
         return -1;
     } else {

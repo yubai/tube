@@ -28,7 +28,7 @@ public:
     virtual bool poll_remove_fd(int fd);
 };
 
-EpollPoller::EpollPoller() 
+EpollPoller::EpollPoller()
     : Poller()
 {
     epoll_fd_ = ::epoll_create(INT_MAX); // should ignore
@@ -46,10 +46,10 @@ static int
 build_epoll_event(PollerEvent evt)
 {
     int res = 0;
-    if (evt & POLLER_EVENT_READ) res |= EPOLLIN;
-    if (evt & POLLER_EVENT_WRITE) res |= EPOLLOUT;
-    if (evt & POLLER_EVENT_ERROR) res |= EPOLLERR;
-    if (evt & POLLER_EVENT_HUP) res |= EPOLLHUP;
+    if (evt & kPollerEventRead) res |= EPOLLIN;
+    if (evt & kPollerEventWrite) res |= EPOLLOUT;
+    if (evt & kPollerEventError) res |= EPOLLERR;
+    if (evt & kPollerEventHup) res |= EPOLLHUP;
     return res;
 }
 
@@ -57,10 +57,10 @@ static PollerEvent
 build_poller_event(int events)
 {
     PollerEvent evt = 0;
-    if (events & EPOLLIN) evt |= POLLER_EVENT_READ;
-    if (events & EPOLLOUT) evt |= POLLER_EVENT_WRITE;
-    if (events & EPOLLERR) evt |= POLLER_EVENT_ERROR;
-    if (events & EPOLLHUP) evt |= POLLER_EVENT_HUP;
+    if (events & EPOLLIN) evt |= kPollerEventRead;
+    if (events & EPOLLOUT) evt |= kPollerEventWrite;
+    if (events & EPOLLERR) evt |= kPollerEventError;
+    if (events & EPOLLHUP) evt |= kPollerEventHup;
     return evt;
 }
 
@@ -96,7 +96,7 @@ EpollPoller::poll_remove_fd(int fd)
 #define MAX_EVENT_PER_POLL 4096
 
 void
-EpollPoller::handle_event(int timeout) 
+EpollPoller::handle_event(int timeout)
 {
     struct epoll_event* epoll_evt = (struct epoll_event*)
         malloc(sizeof(struct epoll_event) * MAX_EVENT_PER_POLL);
@@ -113,7 +113,7 @@ EpollPoller::handle_event(int timeout)
             }
         }
         if (!pre_handler_.empty())
-            pre_handler_(*this);
+            pre_handler_();
         if (!handler_.empty()) {
             for (int i = 0; i < nfds; i++) {
                 conn = (Connection*) epoll_evt[i].data.ptr;
@@ -121,7 +121,7 @@ EpollPoller::handle_event(int timeout)
             }
         }
         if (!post_handler_.empty())
-            post_handler_(*this);
+            post_handler_();
     }
     free(epoll_evt);
 }
