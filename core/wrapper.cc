@@ -23,7 +23,7 @@ Request::~Request()
 ssize_t
 Request::read_data(byte* ptr, size_t sz)
 {
-    Buffer& buf = conn_->in_stream.buffer();
+    Buffer& buf = conn_->in_stream().buffer();
     size_t nbuffer_read = buf.size();
     ssize_t nread = 0;
     if (nbuffer_read > 0) {
@@ -37,9 +37,9 @@ Request::read_data(byte* ptr, size_t sz)
         ptr += nbuffer_read;
     }
     if (sz > 0) {
-        utils::set_socket_blocking(conn_->fd, true);
-        nread = ::read(conn_->fd, (void*) ptr, sz);
-        utils::set_socket_blocking(conn_->fd, false);
+        utils::set_socket_blocking(conn_->fd(), true);
+        nread = ::read(conn_->fd(), (void*) ptr, sz);
+        utils::set_socket_blocking(conn_->fd(), false);
     }
     return nbuffer_read + nread;
 }
@@ -63,7 +63,7 @@ Response::~Response()
 int
 Response::response_code() const
 {
-    if (active() && !conn_->out_stream.is_done())
+    if (active() && !conn_->out_stream().is_done())
         return -1;
     return 0;
 }
@@ -71,7 +71,7 @@ Response::response_code() const
 ssize_t
 Response::write_data(const byte* ptr, size_t sz)
 {
-    OutputStream& out = conn_->out_stream;
+    OutputStream& out = conn_->out_stream();
     ssize_t ret;
     out.append_data(ptr, sz);
 
@@ -97,15 +97,15 @@ Response::write_string(const char* str)
 void
 Response::write_file(int file_desc, off64_t offset, off64_t length)
 {
-    conn_->out_stream.append_file(file_desc, offset, length);
+    conn_->out_stream().append_file(file_desc, offset, length);
 }
 
 ssize_t
 Response::flush_data()
 {
-    OutputStream& out = conn_->out_stream;
+    OutputStream& out = conn_->out_stream();
     ssize_t nwrite = 0;
-    utils::set_socket_blocking(conn_->fd, true);
+    utils::set_socket_blocking(conn_->fd(), true);
     while (true) {
         ssize_t rs = out.write_into_output();
         if (rs < 0) {
@@ -116,7 +116,7 @@ Response::flush_data()
         }
         nwrite += rs;
     }
-    utils::set_socket_blocking(conn_->fd, false);
+    utils::set_socket_blocking(conn_->fd(), false);
     return nwrite;
 }
 

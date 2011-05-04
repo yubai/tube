@@ -17,8 +17,8 @@ Connection*
 HttpConnectionFactory::create_connection(int fd)
 {
     Connection* conn = new HttpConnection(fd);
-    conn->set_timeout(kDefaultTimeout);
-    conn->cork_enabled = kCorkEnabled;
+    conn->set_idle_timeout(kDefaultTimeout);
+    conn->set_cork_enabled(kCorkEnabled);
     return conn;
 }
 
@@ -52,7 +52,7 @@ HttpParserStage::process_task(Connection* conn)
         // FIXME: if the protocol client sent is not HTTP, is it OK to close
         // the connection right away?
         LOG(WARNING, "corrupted protocol from %s. closing...",
-            conn->address.address_string().c_str());
+            conn->address_string().c_str());
         conn->active_close();
     }
     if (!http_connection->get_request_data_list().empty()) {
@@ -113,7 +113,7 @@ HttpHandlerStage::process_task(Connection* conn)
         response.reset();
         if (!request.keep_alive()) {
             LOG(DEBUG, "active close after transfer finish");
-            conn->close_after_finish = true;
+            conn->set_close_after_finish(true);
             goto done;
         }
     }

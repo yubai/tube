@@ -16,49 +16,75 @@
 #include "utils/list.h"
 #include "core/stream.h"
 #include "core/inet_address.h"
+#include "core/timer.h"
 
 namespace tube {
 
-struct Connection
+class Connection
 {
-    // poller specific data, might not be used
-    union {
+public:
+    union PollerSpecData {
         int   data_int;
         void* data_ptr;
-    } poller_spec;
-
-    int       fd;
-    int       timeout;
-    bool      cork_enabled;
-    bool      inactive;
-
-    InternetAddress address;
-
-    // input and output stream
-    InputStream    in_stream;
-    OutputStream   out_stream;
-
-    // locks
-    utils::Mutex mutex;
-    long         owner;
-
-    bool   close_after_finish;
-    time_t last_active;
-
-    bool trylock();
-    void lock();
-    void unlock();
-
-    std::string address_string() const;
-    void set_timeout(int sec) { timeout = sec; }
-    void set_io_timeout(int msec);
-    void set_cork();
-    void clear_cork();
-
-    void active_close();
+    };
 
     Connection(int sock);
     virtual ~Connection() {}
+
+    PollerSpecData poller_spec() const { return poller_spec_; }
+
+    int fd() const { return fd_; }
+    std::string address_string() const;
+    bool is_cork_enabled() const { return cork_enabled_; }
+    bool is_active() const { return !inactive_; }
+    bool is_close_after_finish() const { return close_after_finish_; }
+
+    void set_address(const InternetAddress& addr) { address_ = addr; }
+    void set_idle_timeout(int sec) { timeout_ = sec; }
+    void set_io_timeout(int msec);
+    void set_cork_enabled(bool val) { cork_enabled_ = val; }
+    void set_active(bool active) { inactive_ = !active; }
+    void set_close_after_finish(bool val) { close_after_finish_ = val; }
+
+    // timer related
+    Timer::Unit last_active_time() const { return last_active_; }
+    Timer::Unit timer_sched_time() const;
+    bool        update_last_active();
+
+    bool try_lock();
+    void lock();
+    void unlock();
+
+    void set_cork();
+    void clear_cork();
+
+    const InputStream& in_stream() const { return in_stream_; }
+    const OutputStream& out_stream() const { return out_stream_; }
+    InputStream& in_stream() { return in_stream_; }
+    OutputStream& out_stream() { return out_stream_; }
+
+    void active_close();
+protected:
+    // poller specific data, might not be used
+    PollerSpecData poller_spec_;
+
+    int       fd_;
+    int       timeout_;
+    bool      cork_enabled_;
+    bool      inactive_;
+
+    InternetAddress address_;
+
+    // input and output stream
+    InputStream    in_stream_;
+    OutputStream   out_stream_;
+
+    // locks
+    utils::Mutex mutex_;
+    long         owner_;
+
+    bool        close_after_finish_;
+    Timer::Unit last_active_;
 };
 
 class Scheduler : utils::Noncopyable

@@ -34,7 +34,7 @@ public:
     virtual int process_task(Connection* conn) {
         FilenameRequest request(conn);
         Response response(conn);
-        Buffer& buf = conn->in_stream.buffer();
+        Buffer& buf = conn->in_stream().buffer();
         std::string tmp_str;
         size_t total_size = 0;
 

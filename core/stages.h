@@ -78,7 +78,8 @@ public:
     WriteBackStage();
     virtual ~WriteBackStage();
 
-    virtual int process_task(Connection* conn);
+    virtual bool sched_add(Connection* conn);
+    virtual int  process_task(Connection* conn);
 };
 
 class ParserStage : public Stage

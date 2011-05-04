@@ -284,7 +284,7 @@ HttpResponse::respond(const HttpResponseStatus& status)
 
     if (prepare_buffer_.size() > 0) {
         // send the body if have any
-        conn_->out_stream.append_buffer(prepare_buffer_);
+        conn_->out_stream().append_buffer(prepare_buffer_);
     }
     is_responded_ = true;
 }

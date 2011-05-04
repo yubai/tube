@@ -12,17 +12,31 @@
 namespace tube {
 
 Connection::Connection(int sock)
-    : in_stream(sock), out_stream(sock), close_after_finish(false)
+    : fd_(sock), timeout_(0), cork_enabled_(true), inactive_(false),
+      in_stream_(sock), out_stream_(sock), close_after_finish_(false),
+      last_active_(0)
 {
-    fd = sock;
-    timeout = 0; // default no timeout
-    inactive = false;
-    cork_enabled = true;
-    last_active = 0;
-
+    update_last_active();
     // set nodelay
     int state = 1;
-    setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &state, sizeof(state));
+    setsockopt(fd_, IPPROTO_TCP, TCP_NODELAY, &state, sizeof(state));
+}
+
+Timer::Unit
+Connection::timer_sched_time() const
+{
+    return last_active_ + Timer::timer_unit_from_time(timeout_);
+}
+
+bool
+Connection::update_last_active()
+{
+    Timer::Unit current_unit = Timer::current_timer_unit();
+    if (last_active_ == current_unit) {
+        return false;
+    }
+    last_active_ = current_unit;
+    return true;
 }
 
 void
@@ -35,11 +49,11 @@ Connection::active_close()
 void
 Connection::set_cork()
 {
-    if (!cork_enabled) return;
+    if (!cork_enabled_) return;
 #ifdef __linux__
     int state = 1;
-    if (setsockopt(fd, IPPROTO_TCP, TCP_CORK, &state, sizeof(state)) < 0) {
-        LOG(WARNING, "Cannot set TCP_CORK on fd %d", fd);
+    if (setsockopt(fd_, IPPROTO_TCP, TCP_CORK, &state, sizeof(state)) < 0) {
+        LOG(WARNING, "Cannot set TCP_CORK on fd %d", fd_);
     }
 #endif
 }
@@ -47,13 +61,13 @@ Connection::set_cork()
 void
 Connection::clear_cork()
 {
-    if (!cork_enabled) return;
+    if (!cork_enabled_) return;
 #ifdef __linux__
     int state = 0;
-    if (setsockopt(fd, IPPROTO_TCP, TCP_CORK, &state, sizeof(state)) < 0) {
-        LOG(WARNING, "Cannot clear TCP_CORK on fd %d", fd);
+    if (setsockopt(fd_, IPPROTO_TCP, TCP_CORK, &state, sizeof(state)) < 0) {
+        LOG(WARNING, "Cannot clear TCP_CORK on fd %d", fd_);
     }
-    ::fsync(fd);
+    ::fsync(fd_);
 #endif
 }
 
@@ -64,22 +78,22 @@ Connection::set_io_timeout(int msec)
     tm.tv_sec = msec / 1000;
     tm.tv_usec = (msec % 1000) * 1000;
 
-    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tm, sizeof(struct timeval))
+    if (setsockopt(fd_, SOL_SOCKET, SO_RCVTIMEO, &tm, sizeof(struct timeval))
         < 0) {
-        LOG(WARNING, "Cannot set IO timeout on fd %d", fd);
+        LOG(WARNING, "Cannot set IO timeout on fd %d", fd_);
     }
-    if (setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tm, sizeof(struct timeval))
+    if (setsockopt(fd_, SOL_SOCKET, SO_SNDTIMEO, &tm, sizeof(struct timeval))
         < 0) {
-        LOG(WARNING, "Cannot set IO timeout on fd %d", fd);
+        LOG(WARNING, "Cannot set IO timeout on fd %d", fd_);
     }
 }
 
 bool
-Connection::trylock()
+Connection::try_lock()
 {
-    if (mutex.try_lock()) {
+    if (mutex_.try_lock()) {
 #ifdef TRACK_OWNER
-        owner = utils::get_thread_id();
+        owner_ = utils::get_thread_id();
 #endif
         return true;
     }
@@ -89,9 +103,9 @@ Connection::trylock()
 void
 Connection::lock()
 {
-    mutex.lock();
+    mutex_.lock();
 #ifdef TRACK_OWNER
-    owner = utils::get_thread_id();
+    owner_ = utils::get_thread_id();
 #endif
 }
 
@@ -99,15 +113,15 @@ void
 Connection::unlock()
 {
 #ifdef TRACK_OWNER
-    owner = -1;
+    owner_ = -1;
 #endif
-    mutex.unlock();
+    mutex_.unlock();
 }
 
 std::string
 Connection::address_string() const
 {
-    return address.address_string();
+    return address_.address_string();
 }
 
 Scheduler::Scheduler()
@@ -131,17 +145,17 @@ void
 QueueScheduler::add_task(Connection* conn)
 {
     utils::Lock lk(mutex_);
-    NodeMap::iterator it = nodes_.find(conn->fd);
+    NodeMap::iterator it = nodes_.find(conn->fd());
     if (it != nodes_.end()) {
         // already in the scheduler, put it on the top
         list_.erase(*it);
         list_.push_front(conn);
-        nodes_.erase(conn->fd);
-        nodes_.insert(conn->fd, list_.begin());
+        nodes_.erase(conn->fd());
+        nodes_.insert(conn->fd(), list_.begin());
         return;
     }
     bool need_notify = (list_.size() == 0);
-    nodes_.insert(conn->fd, list_.push_back(conn));
+    nodes_.insert(conn->fd(), list_.push_back(conn));
 
     lk.unlock();
     if (need_notify) {
@@ -189,7 +203,7 @@ QueueScheduler::pick_task_nolock_connection()
     }
     Connection* conn = list_.front();
     list_.pop_front();
-    nodes_.erase(conn->fd);
+    nodes_.erase(conn->fd());
     return conn;
 }
 
@@ -205,9 +219,9 @@ reschedule:
     Connection* conn = NULL;
     for (NodeList::iterator it = list_.begin(); it != list_.end(); ++it) {
         conn = *it;
-        if (conn->trylock()) {
+        if (conn->try_lock()) {
             list_.erase(it);
-            nodes_.erase(conn->fd);
+            nodes_.erase(conn->fd());
             return conn;
         }
     }
@@ -229,12 +243,12 @@ void
 QueueScheduler::remove_task(Connection* conn)
 {
     utils::Lock lk(mutex_);
-    NodeMap::iterator it = nodes_.find(conn->fd);
+    NodeMap::iterator it = nodes_.find(conn->fd());
     if (it == nodes_.end()) {
         return;
     }
     list_.erase(*it);
-    nodes_.erase(conn->fd);
+    nodes_.erase(conn->fd());
 }
 
 QueueScheduler::~QueueScheduler()
@@ -292,7 +306,7 @@ Pipeline::create_connection(int fd)
 void
 Pipeline::dispose_connection(Connection* conn)
 {
-    LOG(DEBUG, "disposing connection %d %p", conn->fd, conn);
+    LOG(DEBUG, "disposing connection %d %p", conn->fd(), conn);
     StageMap::iterator it = map_.begin();
     Stage* stage = NULL;
 
@@ -304,7 +318,7 @@ Pipeline::dispose_connection(Connection* conn)
         }
         ++it;
     }
-    ::close(conn->fd);
+    ::close(conn->fd());
     conn->unlock();
     factory_->destroy_connection(conn);
     LOG(DEBUG, "disposed");
@@ -323,14 +337,14 @@ void
 Pipeline::disable_poll(Connection* conn)
 {
     poll_in_stage_->sched_remove(conn);
-    utils::set_socket_blocking(conn->fd, true);
+    utils::set_socket_blocking(conn->fd(), true);
 }
 
 void
 Pipeline::enable_poll(Connection* conn)
 {
-    utils::set_socket_blocking(conn->fd, false);
-    if (!conn->inactive) {
+    utils::set_socket_blocking(conn->fd(), false);
+    if (conn->is_active()) {
         poll_in_stage_->sched_add(conn);
     }
 }

@@ -121,7 +121,7 @@ HttpConnection::do_parse()
         // application to consume it, since it's a stream
         return true;
     }
-    Buffer& buf = in_stream.buffer();
+    Buffer& buf = in_stream().buffer();
     size_t nconsumed = 0;
     for (Buffer::PageIterator it = buf.page_begin(); it != buf.page_end();
          ++it) {
@@ -155,7 +155,7 @@ HttpConnection::is_ready() const
         return false;
     const HttpRequestData& req_data = requests_.back();
     if (req_data.content_length < kMaxBodySize
-        && in_stream.buffer().size() < req_data.content_length) {
+        && in_stream().buffer().size() < req_data.content_length) {
         // content-length is small enought, we should wait until buffer
         // exceed the content-length
         return false;

@@ -14,7 +14,7 @@ static const char* protocol_text = "GET / HTTP/1.1\r\nHost: www.test.com\r\n\r\n
 static void
 process_stub(HttpConnection* conn)
 {
-    Buffer& buf = conn->in_stream.buffer();
+    Buffer& buf = conn->in_stream().buffer();
     if (conn->is_ready()) {
         int64 clen = conn->get_request_data_list().back().content_length;
         fprintf(stderr, "consume the content with size %lld\n", clen);
@@ -26,7 +26,7 @@ process_stub(HttpConnection* conn)
 static void
 random_test(HttpConnection* conn)
 {
-    Buffer& buf = conn->in_stream.buffer();
+    Buffer& buf = conn->in_stream().buffer();
     const char* ptr = protocol_text;
     size_t len = strlen(protocol_text);
     while (len > 0) {
@@ -45,7 +45,7 @@ random_test(HttpConnection* conn)
 static void
 continous_test(HttpConnection* conn)
 {
-    Buffer& buf = conn->in_stream.buffer();
+    Buffer& buf = conn->in_stream().buffer();
     const char* ptr = protocol_text;
     size_t len = strlen(protocol_text);
     buf.append((const byte*) ptr, len);

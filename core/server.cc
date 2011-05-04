@@ -130,8 +130,8 @@ Server::main_loop()
         }
         // set non-blocking mode
         Connection* conn = pipeline.create_connection(client_fd);
-        conn->address = address;
-        utils::set_socket_blocking(conn->fd, false);
+        conn->set_address(address);
+        utils::set_socket_blocking(conn->fd(), false);
 
         LOG(INFO, "accepted connection from %s",
             conn->address_string().c_str());

@@ -96,27 +96,24 @@ PollInStage::sched_add(Connection* conn)
 {
     utils::Lock lk(mutex_);
     current_poller_ = (current_poller_ + 1) % pollers_.size();
+
     Poller& poller = *pollers_[current_poller_];
-    Timer::Unit current_unit = Timer::current_timer_unit();
-    Timer::Unit future_unit = current_unit
-        + Timer::timer_unit_from_time(conn->timeout);
     Timer::Callback callback = boost::bind(
         &PollInStage::cleanup_idle_connection_callback, this,
         boost::ref(poller), _1);
 
-    poller.timer().replace(future_unit, conn, callback);
-    return poller.add_fd(
-        conn->fd, conn, kPollerEventRead | kPollerEventWrite | kPollerEventHup);
+    poller.timer().replace(conn->timer_sched_time(), conn, callback);
+    return poller.add_fd(conn->fd(), conn, kPollerEventRead | kPollerEventWrite
+                         | kPollerEventHup);
 }
 
 void
 PollInStage::sched_remove(Connection* conn)
 {
     utils::Lock lk(mutex_);
-    Timer::Unit oldfuture = conn->last_active
-        + Timer::timer_unit_from_time(conn->timeout);
+    Timer::Unit oldfuture = conn->timer_sched_time();
     for (size_t i = 0; i < pollers_.size(); i++) {
-        if (pollers_[i]->remove_fd(conn->fd)) {
+        if (pollers_[i]->remove_fd(conn->fd())) {
             pollers_[i]->timer().remove(oldfuture, conn);
             return;
         }
@@ -139,9 +136,9 @@ PollInStage::cleanup_connection(Connection* conn)
 {
     assert(conn);
 
-    if (!conn->inactive) {
-        conn->inactive = true;
-        ::shutdown(conn->fd, SHUT_RDWR);
+    if (conn->is_active()) {
+        conn->set_active(false);
+        ::shutdown(conn->fd(), SHUT_RDWR);
         sched_remove(conn);
         recycle_stage_->sched_add(conn);
     }
@@ -152,14 +149,13 @@ PollInStage::cleanup_connection(Poller& poller, Connection* conn)
 {
     assert(conn);
 
-    if (!conn->inactive) {
-        Timer::Unit oldfuture = conn->last_active
-            + Timer::timer_unit_from_time(conn->timeout);
-        conn->inactive = true;
-        ::shutdown(conn->fd, SHUT_RDWR);
+    if (conn->is_active()) {
+        Timer::Unit oldfuture = conn->timer_sched_time();
+        conn->set_active(false);
+        ::shutdown(conn->fd(), SHUT_RDWR);
 
         utils::Lock lk(mutex_);
-        poller.remove_fd(conn->fd);
+        poller.remove_fd(conn->fd());
         poller.timer().remove(oldfuture, conn);
         recycle_stage_->sched_add(conn);
     }
@@ -169,7 +165,7 @@ bool
 PollInStage::cleanup_idle_connection_callback(Poller& poller, void* ptr)
 {
     Connection* conn = (Connection*) ptr;
-    if (!conn->trylock())
+    if (!conn->try_lock())
         return false;
     cleanup_connection(poller, conn);
     return true;
@@ -180,31 +176,25 @@ PollInStage::read_connection(Poller& poller, Connection* conn)
 {
     assert(conn);
 
-    if (!conn->trylock()) // avoid lock contention
+    if (!conn->try_lock()) // avoid lock contention
         return;
 
     // update the timer
     Timer& timer = poller.timer();
-    Timer::Unit current_unit = Timer::current_timer_unit();
-    if (conn->last_active != current_unit) {
-        Timer::Unit oldfuture = conn->last_active
-            + Timer::timer_unit_from_time(conn->timeout);
-        Timer::Unit future = current_unit
-            + Timer::timer_unit_from_time(conn->timeout);
+    Timer::Unit oldfuture = conn->timer_sched_time();
+    if (conn->update_last_active()) {
         Timer::Callback cb =
             boost::bind(&PollInStage::cleanup_idle_connection_callback,
                         this, boost::ref(poller), _1);
-        conn->last_active = current_unit;
         utils::Lock lk(mutex_);
         timer.remove(oldfuture, conn);
-        timer.replace(future, conn, cb);
+        timer.replace(conn->timer_sched_time(), conn, cb);
     }
 
     int nread;
     do {
-        nread = conn->in_stream.read_into_buffer();
+        nread = conn->in_stream().read_into_buffer();
     } while (nread > 0);
-    conn->last_active = time(NULL);
     conn->unlock();
     pipeline_.reschedule_all();
 
@@ -262,7 +252,7 @@ PollInStage::main_loop()
 WriteBackStage::WriteBackStage()
     : Stage("write_back")
 {
-    sched_ = new QueueScheduler(true);
+    sched_ = new QueueScheduler(true); // suppress lock
 }
 
 WriteBackStage::~WriteBackStage()
@@ -270,21 +260,28 @@ WriteBackStage::~WriteBackStage()
     delete sched_;
 }
 
+bool
+WriteBackStage::sched_add(Connection* conn)
+{
+    conn->set_cork();
+    utils::set_socket_blocking(conn->fd(), true);
+    Stage::sched_add(conn);
+    return true;
+}
+
 int
 WriteBackStage::process_task(Connection* conn)
 {
-    conn->last_active = time(NULL);
-    utils::set_socket_blocking(conn->fd, true);
-    OutputStream& out = conn->out_stream;
+    OutputStream& out = conn->out_stream();
     int rs = out.write_into_output();
-    utils::set_socket_blocking(conn->fd, false);
 
     if (!out.is_done() && rs > 0) {
         sched_add(conn);
         return -1;
     } else {
         conn->clear_cork();
-        if (conn->close_after_finish) {
+        utils::set_socket_blocking(conn->fd(), false);
+        if (conn->is_close_after_finish()) {
             conn->active_close();
         }
         return 0; // done, and not to schedule it anymore
