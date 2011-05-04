@@ -7,6 +7,8 @@
 #include <map>
 #include <ctime>
 
+#include "utils/misc.h"
+
 namespace tube {
 
 class Timer
@@ -18,9 +20,10 @@ public:
 
     static int kUnitGrand;
 
+    Timer();
+
     bool set(Unit unit, Context ctx, const Callback& call);
     void replace(Unit unit, Context ctx, const Callback& call);
-    bool remove(Unit unit, Context ctx, Callback& call);
     bool remove(Unit unit, Context ctx);
     bool query(Unit unit, Context ctx, Callback& call);
 
@@ -42,8 +45,11 @@ private:
             : unit(timerunit), ctx(context) {}
     };
     typedef std::map<TimerKey, Callback> TimerTree;
-    TimerTree rbtree_;
-    Unit      last_executed_;
+
+    TimerTree    rbtree_;
+    Unit         last_executed_;
+    utils::Mutex mutex_;
+    bool         nolock_;
 
     bool invoke_callback(TimerTree::iterator it);
 };

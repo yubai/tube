@@ -157,6 +157,8 @@ PollInStage::cleanup_connection(Poller& poller, Connection* conn)
             + Timer::timer_unit_from_time(conn->timeout);
         conn->inactive = true;
         ::shutdown(conn->fd, SHUT_RDWR);
+
+        utils::Lock lk(mutex_);
         poller.remove_fd(conn->fd);
         poller.timer().remove(oldfuture, conn);
         recycle_stage_->sched_add(conn);
@@ -192,9 +194,10 @@ PollInStage::read_connection(Poller& poller, Connection* conn)
         Timer::Callback cb =
             boost::bind(&PollInStage::cleanup_idle_connection_callback,
                         this, boost::ref(poller), _1);
-        timer.remove(oldfuture, conn, cb);
-        timer.replace(future, conn, cb);
         conn->last_active = current_unit;
+        utils::Lock lk(mutex_);
+        timer.remove(oldfuture, conn);
+        timer.replace(future, conn, cb);
     }
 
     int nread;
@@ -209,6 +212,7 @@ PollInStage::read_connection(Poller& poller, Connection* conn)
         // send it to parser stage
         parser_stage_->sched_add(conn);
     } else {
+        // error happened, clean it up
         cleanup_connection(poller, conn);
     }
 }

@@ -54,12 +54,13 @@ public:
 
     Timer& timer() { return timer_; }
 protected:
-    Timer          timer_;
-    FDMap          fds_;
     // handler when events happened
     EventCallback  handler_;
     // handler before or after events processed
     PollerCallback pre_handler_, post_handler_;
+private:
+    Timer          timer_;
+    FDMap          fds_;
 protected:
     bool add_fd_set(int fd, Connection* conn);
     bool remove_fd_set(int fd);

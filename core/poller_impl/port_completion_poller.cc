@@ -25,7 +25,8 @@ namespace tube {
 
 class PortPoller : public Poller
 {
-    int port_;
+    utils::Mutex mutex_;
+    int          port_;
 
     struct PendingOps {
         int         ops;
@@ -34,7 +35,6 @@ class PortPoller : public Poller
             int         fd;
         } ops_data;
     };
-    utils::Mutex            mutex_;
     std::queue<PendingOps>  pending_;
 public:
     PortPoller() ;
