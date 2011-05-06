@@ -139,6 +139,8 @@ public:
 };
 
 class PollInStage;
+class WriteBackStage;
+class RecycleStage;
 
 class Pipeline : utils::Noncopyable
 {
@@ -147,6 +149,8 @@ class Pipeline : utils::Noncopyable
     utils::RWMutex mutex_;
 
     PollInStage*       poll_in_stage_;
+    WriteBackStage*    write_back_stage_;
+    RecycleStage*      recycle_stage_;
     ConnectionFactory* factory_;
 
     Pipeline();
@@ -160,15 +164,19 @@ public:
 
     utils::RWMutex& mutex() { return mutex_; }
 
-    void add_stage(const std::string& name, Stage* stage);
 
     void set_connection_factory(ConnectionFactory* fac);
 
-    PollInStage* poll_in_stage() const { return poll_in_stage_; }
-    Stage* find_stage(const std::string& name);
+    PollInStage*    poll_in_stage() const { return poll_in_stage_; }
+    WriteBackStage* write_back_stage() const { return write_back_stage_; }
+    RecycleStage*   recycle_stage() const { return recycle_stage_; }
+    void            add_stage(const std::string& name, Stage* stage);
+    Stage*          find_stage(const std::string& name) const;
+    void            initialize_stages();
+    void            start_stages();
 
     Connection* create_connection(int fd);
-    void dispose_connection(Connection* conn);
+    void        dispose_connection(Connection* conn);
 
     void disable_poll(Connection* conn);
     void enable_poll(Connection* conn);

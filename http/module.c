@@ -2,15 +2,33 @@
 #include <dlfcn.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <dirent.h>
 
 #include "http/module.h"
 
 #define MAX_MODULE_CNT 256
+#define MAX_ERROR_LENGTH 1024
 
 static size_t         nr_module;
 static tube_module_t* modules[MAX_MODULE_CNT];
+static char*          last_error = NULL;
+
+static inline void
+set_last_error(const char* error)
+{
+    free(last_error);
+    if (error != NULL) {
+        last_error = strndup(error, 1024);
+    }
+}
+
+const char*
+tube_module_last_error()
+{
+    return last_error;
+}
 
 tube_module_t*
 tube_module_load(const char* filename)
@@ -20,12 +38,14 @@ tube_module_load(const char* filename)
     tube_module_t* module_ptr = NULL;
 
     if (handle == NULL) {
+        set_last_error(dlerror());
         return NULL;
     }
 
     sym_handle = dlsym(handle, EXPORT_MODULE_PTR_NAME);
     if (sym_handle == NULL) {
         dlclose(handle);
+        set_last_error(dlerror());
         return NULL;
     }
     module_ptr = *(tube_module_t**) sym_handle;
@@ -69,28 +89,56 @@ tube_module_finalize_all()
     }
 }
 
-#define MAX_PATH_LEN 1024
+static inline int
+is_file_shared_object(const char* filename)
+{
+    if (filename == NULL) {
+        return 0;
+    } else if (filename[0] == 0 || filename[0] == '.') {
+        return 0;
+    }
+    const char* ext = filename + strlen(filename) - 3;
+    if (strcmp(ext, ".so") != 0) {
+        return 0;
+    }
+    return 1;
+}
 
 int
 tube_module_load_dir(const char* dirname)
 {
-    DIR* dir = opendir(dirname);
-    if (dir == NULL) {
+    long max_path_length = pathconf(dirname, _PC_PATH_MAX);
+    DIR* dir = NULL;
+    char* path = NULL;
+
+    if (max_path_length < 0) {
         return 0;
     }
 
-    char path[MAX_PATH_LEN];
+    path = malloc(max_path_length);
+    dir = opendir(dirname);
+    if (dir == NULL || path == NULL) {
+        return 0;
+    }
+
     struct dirent* ent = NULL;
     while ((ent = readdir(dir))) {
         const char* fname = ent->d_name;
         tube_module_t* module = NULL;
-        if (fname[0] == '.') continue;
-        snprintf(path, MAX_PATH_LEN, "%s/%s", dirname, fname);
+
+        if (!is_file_shared_object(fname)) {
+            continue;
+        }
+
+        snprintf(path, max_path_length, "%s/%s", dirname, fname);
         module = tube_module_load(path);
         if (module) {
             tube_module_register_module(module);
+        } else {
+            fprintf(stderr, "%s\n", tube_module_last_error());
         }
     }
+    free(path);
     closedir(dir);
     return 1;
 }

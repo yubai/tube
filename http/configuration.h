@@ -80,8 +80,24 @@ public:
                                  HttpRequestData& req_ref) const;
 };
 
+class ThreadPoolConfig
+{
+    Pipeline& pipeline_;
+
+    ThreadPoolConfig();
+    ~ThreadPoolConfig();
+public:
+    static ThreadPoolConfig& instance() {
+        static ThreadPoolConfig ins;
+        return ins;
+    }
+
+    void load_thread_pool_config(const Node& subdoc);
+};
+
 class ServerConfig
 {
+    Pipeline& pipeline_;
     ServerConfig();
     ~ServerConfig();
 public:
@@ -94,23 +110,12 @@ public:
 
     std::string address() const { return address_; }
     std::string port() const { return port_; }
-    int read_stage_pool_size() const { return read_stage_pool_size_; }
-    int write_stage_pool_size() const {   return write_stage_pool_size_; }
-    int recycle_threshold() const { return recycle_threshold_; }
-    int handler_stage_pool_size() const { return handler_stage_pool_size_; }
-    int parser_stage_pool_size() const { return parser_stage_pool_size_; }
     int listen_queue_size() const { return listen_queue_size_; }
 
 private:
     std::string address_;
-    std::string port_; // port can be a server, keep it as a string
-
-    int read_stage_pool_size_;
-    int write_stage_pool_size_;
-    int recycle_threshold_;
-    int handler_stage_pool_size_;
-    int parser_stage_pool_size_;
-    int listen_queue_size_;
+    std::string port_; // port can be a service, keep it as a string
+    int         listen_queue_size_;
 };
 
 }

@@ -44,18 +44,10 @@ class HashServer : public Server
 {
     HashParser*  parse_stage_;
 public:
-    HashServer() : Server("0.0.0.0", "7000") {
+    HashServer() {
         utils::set_fdtable_size(8096);
         utils::logger.set_level(DEBUG);
         parse_stage_ = new HashParser();
-        parse_stage_->initialize();
-        initialize_stages();
-    }
-
-    void start() {
-        for (int i = 0; i < 2; i++) {
-            parse_stage_->start_thread();
-        }
     }
 
     virtual ~HashServer() {
@@ -68,9 +60,10 @@ static HashServer server;
 int
 main(int argc, char *argv[])
 {
-    server.start();
+    server.bind("0.0.0.0", "7000");
+    server.initialize_stages();
+    server.start_stages();
     server.listen(128);
-    server.start_all_threads();
 
     server.main_loop();
     return 0;

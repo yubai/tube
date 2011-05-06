@@ -21,36 +21,10 @@ class WebServer : public Server
 {
     HttpParserStage* parser_stage_;
     HttpHandlerStage* handler_stage_;
-    size_t handler_stage_pool_size_;
-    size_t parser_stage_pool_size_;
 public:
-    WebServer(const char* address, const char* port)
-        : Server(address, port), handler_stage_pool_size_(2),
-          parser_stage_pool_size_(1) {
+    WebServer() {
         parser_stage_ = new HttpParserStage();
         handler_stage_ = new HttpHandlerStage();
-    }
-
-    void initialize_stages() {
-        Server::initialize_stages();
-        parser_stage_->initialize();
-        handler_stage_->initialize();
-    }
-
-    void start_all_threads() {
-        parser_stage_->start_thread();
-        for (size_t i = 0; i < handler_stage_pool_size_; i++) {
-            handler_stage_->start_thread();
-        }
-        Server::start_all_threads();
-    }
-
-    void set_handler_stage_pool_size(size_t val) {
-        handler_stage_pool_size_ = val;
-    }
-
-    void set_parser_stage_pool_size(size_t val) {
-        parser_stage_pool_size_ = val;
     }
 
     virtual ~WebServer() {
@@ -119,7 +93,6 @@ using namespace tube;
 static void
 on_quit_signal(int sig)
 {
-    puts("here");
     exit(0);
 }
 
@@ -134,30 +107,16 @@ main(int argc, char* argv[])
         }
     }
     load_modules();
+    WebServer server;
     ServerConfig& cfg = ServerConfig::instance();
     try {
         cfg.load_config_file(conf_file.c_str());
-        WebServer server(cfg.address().c_str(), cfg.port().c_str());
-        if (cfg.read_stage_pool_size() > 0) {
-            server.set_read_stage_pool_size(cfg.read_stage_pool_size());
-        }
-        if (cfg.write_stage_pool_size() > 0) {
-            server.set_write_stage_pool_size(cfg.write_stage_pool_size());
-        }
-        if (cfg.recycle_threshold() > 0) {
-            server.set_recycle_threshold(cfg.recycle_threshold());
-        }
-        if (cfg.handler_stage_pool_size() > 0) {
-            server.set_handler_stage_pool_size(cfg.handler_stage_pool_size());
-        }
-        if (cfg.parser_stage_pool_size() > 0) {
-            server.set_parser_stage_pool_size(cfg.parser_stage_pool_size());
-        }
-        server.initialize_stages();
-        server.start_all_threads();
+        server.bind(cfg.address().c_str(), cfg.port().c_str());
         server.listen(cfg.listen_queue_size());
-        puts("settingup signal");
+        server.initialize_stages();
+        server.start_stages();
         ::signal(SIGINT, on_quit_signal);
+
         server.main_loop();
     } catch (utils::SyscallException ex) {
         fprintf(stderr, "Cannot start server: %s\n", ex.what());

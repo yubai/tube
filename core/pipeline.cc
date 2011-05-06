@@ -287,13 +287,31 @@ Pipeline::set_connection_factory(ConnectionFactory* fac)
 }
 
 Stage*
-Pipeline::find_stage(const std::string& name)
+Pipeline::find_stage(const std::string& name) const
 {
-    StageMap::iterator it = map_.find(name);
+    StageMap::const_iterator it = map_.find(name);
     if (it == map_.end()) {
         return NULL;
     } else {
         return it->second;
+    }
+}
+
+void
+Pipeline::initialize_stages()
+{
+    for (StageMap::iterator it = map_.begin(); it != map_.end(); ++it) {
+        Stage* stage = it->second;
+        stage->initialize();
+    }
+}
+
+void
+Pipeline::start_stages()
+{
+    for (StageMap::iterator it = map_.begin(); it != map_.end(); ++it) {
+        Stage* stage = it->second;
+        stage->start_thread_pool();
     }
 }
 
@@ -329,6 +347,10 @@ Pipeline::add_stage(const std::string& name, Stage* stage)
 {
     if (name == "poll_in") {
         poll_in_stage_ = (PollInStage*) stage;
+    } else if (name == "write_back") {
+        write_back_stage_ = (WriteBackStage*) stage;
+    } else if (name == "recycle") {
+        recycle_stage_ = (RecycleStage*) stage;
     }
     map_.insert(std::make_pair(name, stage));
 }

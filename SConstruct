@@ -24,7 +24,7 @@ def CompilerMTOption():
         return ''
 
 essential_cflags = '-pipe -Wall'
-cflags = '-g -DLOG_ENABLED'
+cflags = '-g'
 inc_path = ['.']
 
 profile = (ARGUMENTS.get('profile', 0) == '1')

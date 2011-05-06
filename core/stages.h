@@ -17,6 +17,7 @@ class Stage
 protected:
     Scheduler* sched_;
     Pipeline&  pipeline_;
+    size_t     thread_pool_size_;
 protected:
     Stage(const std::string& name);
     virtual ~Stage() {}
@@ -31,10 +32,13 @@ public:
 
     virtual void main_loop();
 
-    void start_thread();
-};
+    size_t     thread_pool_size() const { return thread_pool_size_; }
+    Scheduler* scheduler() const { return sched_; }
+    void       set_thread_pool_size(size_t size) { thread_pool_size_ = size; }
 
-class IdleScanner;
+    virtual void start_thread();
+    virtual void start_thread_pool();
+};
 
 class PollInStage : public Stage
 {
@@ -96,15 +100,15 @@ class RecycleStage : public Stage
     std::queue<Connection*> queue_;
     size_t                  recycle_batch_size_;
 public:
-    RecycleStage()
-        : Stage("recycle"), recycle_batch_size_(1) {}
-
+    RecycleStage();
     virtual ~RecycleStage() {}
 
     virtual bool sched_add(Connection* conn);
     virtual void sched_remove(Connection* conn) {}
 
     virtual void main_loop();
+    virtual void start_thread_pool();
+
     void set_recycle_batch_size(size_t size) { recycle_batch_size_ = size; }
 };
 

@@ -35,18 +35,11 @@ class PingPongServer : public Server
 {
     PingPongParser* parser_stage_;
 public:
-    PingPongServer() : Server("0.0.0.0", "7000") {
+    PingPongServer() {
         utils::set_fdtable_size(20000);
         utils::logger.set_level(DEBUG);
 
         parser_stage_ = new PingPongParser();
-        parser_stage_->initialize();
-
-        initialize_stages();
-    }
-
-    void start() {
-        parser_stage_->start_thread();
     }
 
     virtual ~PingPongServer() {
@@ -65,9 +58,10 @@ on_quit_signal(int sig)
 int
 main(int argc, char *argv[])
 {
-    server.start();
+    server.bind("0.0.0.0", "7000");
+    server.initialize_stages();
+    server.start_stages();
     server.listen(128);
-    server.start_all_threads();
 
     ::signal(SIGINT, on_quit_signal);
     server.main_loop();

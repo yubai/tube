@@ -4,6 +4,8 @@
 
 #include "http/configuration.h"
 #include "http/http_stages.h"
+#include "core/pipeline.h"
+#include "core/stages.h"
 #include "utils/logger.h"
 #include "utils/misc.h"
 
@@ -231,9 +233,44 @@ VHostConfig::match_uri(const std::string& host, HttpRequestData& req_ref) const
     return it->second.match_uri(req_ref);
 }
 
+ThreadPoolConfig::ThreadPoolConfig()
+    : pipeline_(Pipeline::instance())
+{}
+
+ThreadPoolConfig::~ThreadPoolConfig()
+{}
+
+void
+ThreadPoolConfig::load_thread_pool_config(const Node& subdoc)
+{
+    std::string key;
+    std::string value;
+    int pool_size;
+    Stage* stage;
+    for (YAML::Iterator it = subdoc.begin(); it != subdoc.end(); ++it) {
+        it.first() >> key;
+        it.second() >> value;
+        if (key == "recycle") {
+            LOG(ERROR, "recycle stage's thread pool size cannot be set");
+            continue;
+        }
+        pool_size = atoi(value.c_str());
+        stage = pipeline_.find_stage(key);
+        if (stage == NULL) {
+            LOG(ERROR, "Cannot find stage %s for setting thread pool size",
+                key.c_str());
+            continue;
+        }
+        if (pool_size <= 0) {
+            LOG(ERROR, "Invalid pool size %d", pool_size);
+            continue;
+        }
+        stage->set_thread_pool_size(pool_size);
+    }
+}
+
 ServerConfig::ServerConfig()
-    : read_stage_pool_size_(0), write_stage_pool_size_(0),
-      recycle_threshold_(0), handler_stage_pool_size_(0)
+    : pipeline_(Pipeline::instance()), listen_queue_size_(128)
 {}
 
 ServerConfig::~ServerConfig()
@@ -246,6 +283,8 @@ ServerConfig::load_config_file(const char* filename)
     YAML::Parser parser(fin);
     HandlerConfig& handler_cfg = HandlerConfig::instance();
     VHostConfig& host_cfg = VHostConfig::instance();
+    ThreadPoolConfig& thread_pool_cfg = ThreadPoolConfig::instance();
+    int recycle_threshold = 0;
 
     Node doc;
     while (parser.GetNextDocument(doc)) {
@@ -260,24 +299,19 @@ ServerConfig::load_config_file(const char* filename)
                 handler_cfg.load_handlers(it.second());
             } else if (key == "host") {
                 host_cfg.load_vhost_rules(it.second());
-            } else if (key == "read_stage_pool_size") {
-                it.second() >> value;
-                read_stage_pool_size_ = atoi(value.c_str());
-            } else if (key == "write_stage_pool_size") {
-                it.second() >> value;
-                write_stage_pool_size_ = atoi(value.c_str());
+            } else if (key == "thread_pool") {
+                thread_pool_cfg.load_thread_pool_config(it.second());
             } else if (key == "recycle_threshold") {
                 it.second() >> value;
-                recycle_threshold_ = atoi(value.c_str());
-            } else if (key == "handler_stage_pool_size") {
-                it.second() >> value;
-                handler_stage_pool_size_ = atoi(value.c_str());
-            } else if (key == "parser_stage_pool_size") {
-                it.second() >> value;
-                parser_stage_pool_size_ = atoi(value.c_str());
+                recycle_threshold = atoi(value.c_str());
             } else if (key == "listen_queue_size") {
                 it.second() >> value;
                 listen_queue_size_ = atoi(value.c_str());
+                if (listen_queue_size_ <= 0) {
+                    LOG(ERROR, "Invalid listen_queue_size, fallback to "
+                        "default.");
+                    listen_queue_size_ = 128;
+                }
             } else if (key == "idle_timeout") {
                 it.second() >> value;
                 HttpConnectionFactory::kDefaultTimeout = atoi(value.c_str());
@@ -287,6 +321,9 @@ ServerConfig::load_config_file(const char* filename)
             }
             LOG(INFO, "ignore unsupported key %s", key.c_str());
         }
+    }
+    if (recycle_threshold > 0) {
+        pipeline_.recycle_stage()->set_recycle_batch_size(recycle_threshold);
     }
 }
 

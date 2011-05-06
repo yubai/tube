@@ -27,6 +27,7 @@ struct _tube_module_t
 
 tube_module_t* tube_module_load(const char* filename);
 int            tube_module_load_dir(const char* dirname);
+const char*    tube_module_last_error();
 
 void           tube_module_register_module(tube_module_t* module);
 void           tube_module_initialize_all();

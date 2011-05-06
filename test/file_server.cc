@@ -78,17 +78,9 @@ class FileServer : public Server
 {
     FilenameParser* parser_stage_;
 public:
-    FileServer() : Server("0.0.0.0", "7000") {
+    FileServer() {
         utils::logger.set_level(DEBUG);
-
         parser_stage_ = new FilenameParser();
-        parser_stage_->initialize();
-
-        initialize_stages();
-    }
-
-    void start() {
-        parser_stage_->start_thread();
     }
 
     virtual ~FileServer() {
@@ -101,9 +93,10 @@ static FileServer server;
 int
 main(int argc, char *argv[])
 {
-    server.start();
+    server.bind("0.0.0.0", "7000");
+    server.initialize_stages();
+    server.start_stages();
     server.listen(128);
-    server.start_all_threads();
 
     server.main_loop();
     return 0;

@@ -15,7 +15,7 @@ using namespace tube::utils;
 namespace tube {
 
 Stage::Stage(const std::string& name)
-    : pipeline_(Pipeline::instance())
+    : pipeline_(Pipeline::instance()), thread_pool_size_(1)
 {
     sched_ = NULL;
     LOG(INFO, "adding %s stage to pipeline", name.c_str());
@@ -66,6 +66,14 @@ Stage::start_thread()
     Thread th(boost::bind(&Stage::main_loop, this));
 }
 
+void
+Stage::start_thread_pool()
+{
+    for (size_t i = 0; i < thread_pool_size_; i++) {
+        start_thread();
+    }
+}
+
 int PollInStage::kDefaultTimeout = 10;
 
 PollInStage::PollInStage()
@@ -103,8 +111,7 @@ PollInStage::sched_add(Connection* conn)
         boost::ref(poller), _1);
 
     poller.timer().replace(conn->timer_sched_time(), conn, callback);
-    return poller.add_fd(conn->fd(), conn, kPollerEventRead | kPollerEventWrite
-                         | kPollerEventHup);
+    return poller.add_fd(conn->fd(), conn, kPollerEventRead | kPollerEventHup);
 }
 
 void
@@ -221,12 +228,15 @@ PollInStage::handle_connection(Poller& poller, Connection* conn,
 void
 PollInStage::post_handle_connection(Poller& poller)
 {
-    Timer::Unit current_unit = Timer::current_timer_unit();
-    Timer& timer = poller.timer();
-    if (timer.last_executed_time() + Timer::timer_unit_from_time(timeout_)
-        <= current_unit) {
-        poller.timer().process_callbacks();
-        timer.set_last_executed_time(current_unit);
+    if (mutex_.try_lock()) {
+        Timer::Unit current_unit = Timer::current_timer_unit();
+        Timer& timer = poller.timer();
+        if (timer.last_executed_time() + Timer::timer_unit_from_time(timeout_)
+            <= current_unit) {
+            poller.timer().process_callbacks();
+            timer.set_last_executed_time(current_unit);
+        }
+        mutex_.unlock();
     }
     recycle_stage_->sched_add(NULL); // add recycle barrier
 }
@@ -299,6 +309,9 @@ ParserStage::~ParserStage()
     delete sched_;
 }
 
+RecycleStage::RecycleStage()
+    : Stage("recycle"), recycle_batch_size_(1) {}
+
 bool
 RecycleStage::sched_add(Connection* conn)
 {
@@ -308,6 +321,13 @@ RecycleStage::sched_add(Connection* conn)
         cond_.notify_one();
     }
     return true;
+}
+
+void
+RecycleStage::start_thread_pool()
+{
+    // omit the thread pool size setting
+    start_thread();
 }
 
 void
