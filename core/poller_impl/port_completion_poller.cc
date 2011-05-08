@@ -118,10 +118,9 @@ PortPoller::handle_event(int timeout)
     Connection* conn = NULL;
     while (true) {
         uint_t nfds = 0;
-        /* weird handling.
-         * 1. getn seems return immediately when no fd is associated
-         * 2. get/getn will return error on timeout
-         */
+        // weird handling.
+        // 1. getn seems return immediately when no fd is associated
+        // 2. get/getn will return error on timeout
         if (::port_getn(port_, port_evt, MAX_EVENT_PER_GET, &nfds, &tspec)
             == -1) {
             if (errno == EINTR) {

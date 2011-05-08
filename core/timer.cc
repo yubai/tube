@@ -4,25 +4,6 @@
 
 namespace tube {
 
-bool
-Timer::TimerKey::operator<(const TimerKey& rhs) const
-{
-    return (unit < rhs.unit && (long) ctx < (long) rhs.ctx);
-}
-
-int Timer::kUnitGrand = 2; // 2 seconds
-
-Timer::Unit
-Timer::current_timer_unit()
-{
-    return time(NULL) / kUnitGrand;
-}
-
-Timer::Timer()
-    : last_executed_(current_timer_unit()), nolock_(false)
-{
-}
-
 class TimerLock
 {
     utils::Mutex& mutex_;
@@ -39,6 +20,25 @@ public:
 };
 
 bool
+Timer::TimerKey::operator<(const TimerKey& rhs) const
+{
+    return (unit < rhs.unit && (long) ctx < (long) rhs.ctx);
+}
+
+int Timer::kUnitGran = 2; // 2 seconds
+
+Timer::Unit
+Timer::current_timer_unit()
+{
+    return time(NULL) / kUnitGran;
+}
+
+Timer::Timer()
+    : last_executed_(current_timer_unit()), nolock_(false)
+{
+}
+
+bool
 Timer::set(Timer::Unit unit, Timer::Context ctx, const Timer::Callback& call)
 {
     TimerLock lk(mutex_, nolock_);
@@ -53,7 +53,7 @@ Timer::set(Timer::Unit unit, Timer::Context ctx, const Timer::Callback& call)
 void
 Timer::replace(Timer::Unit unit, Timer::Context ctx, const Timer::Callback& call)
 {
-    TimerLock lk(mutex_, nolock_);
+    utils::Lock lk(mutex_);
     rbtree_.insert(std::make_pair(TimerKey(unit, ctx), call));
 }
 

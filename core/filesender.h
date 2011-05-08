@@ -10,6 +10,11 @@
 
 namespace tube {
 
+/**
+ * A implementation of Writeable interface.  It use sendfile() system
+ * call to send the file directly to the client socket.
+ * It uses zero user-space memory.
+ */
 class FileSender : public Writeable
 {
     int         file_fd_;
@@ -21,6 +26,10 @@ public:
 
     virtual ssize_t write_to_fd(int fd);
     virtual u64     size() const { return length_; }
+    /**
+     * File sender comsume zero memory, therefore, this always returns zero
+     * @return zero
+     */
     virtual size_t  memory_usage() const { return 0; }
     virtual bool    append(const byte* data, size_t size) { return false; }
 };

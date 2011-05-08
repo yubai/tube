@@ -5,6 +5,8 @@ AddOption('--prefix', dest='prefix', metavar='DIR', help='installation prefix')
 AddOption('--libdir', dest='libdir', metavar='DIR', help='libdata dir')
 
 opts = Variables('configure.conf')
+build_dir = 'build'
+
 opts.Add('PREFIX', default='/usr/local')
 opts.Add('LIBDIR', default='/usr/local/lib')
 
@@ -34,8 +36,9 @@ if GetOS() == 'FreeBSD':
 
 if profile:
     cflags = '-O2 -mtune=generic -g -lprofiler'
+    build_dir = 'profile'
 
-env = Environment(ENV=os.environ, CPPPATH=inc_path)
+env = Environment(ENV=os.environ, CPPPATH=inc_path, LIBPATH=['.'])
 opts.Update(env)
 
 env.MergeFlags(cflags)
@@ -54,10 +57,6 @@ if GetOption('libdir') is not None:
 opts.Save('configure.conf', env)
 
 Export('opts', 'env', 'GetOS')
-
-build_dir = 'build'
-if profile:
-    build_dir = 'profile'
 
 SConscript('./SConscript', variant_dir=build_dir, duplicate=0)
 SConscript('./modules/mod_python/SConscript', variant_dir=build_dir + '/modules/mod_python', duplicate=0)

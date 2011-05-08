@@ -21,7 +21,13 @@ public:
     Wrapper(Connection* conn);
     virtual ~Wrapper() {}
 protected:
+    /**
+     * Disable IO poll for this connection.
+     */
     void disable_poll() { pipeline_.disable_poll(conn_); }
+    /**
+     * Enable IO poll for this connection.
+     */
     void enable_poll() { pipeline_.enable_poll(conn_); }
 };
 
@@ -31,6 +37,12 @@ public:
     Request(Connection* conn);
     virtual ~Request();
 
+    /**
+     * Read data in blocking mode.
+     * @param ptr Pointer of data.
+     * @param size Maximum size to be read.
+     * @return Number of bytes read, -1 means error.
+     */
     ssize_t read_data(byte* ptr, size_t sz);
 };
 
@@ -47,15 +59,30 @@ public:
     Response(Connection* conn);
     virtual ~Response();
 
+    /**
+     * Response code is used for feed back the stage processing scheme.
+     * If smaller than zero means keep the connection lock, otherwise will
+     * release the connection lock.
+     *
+     * So custom stage implementation should always return response_code() on
+     * process_task() routine.
+     */
     int     response_code() const;
 
     virtual ssize_t write_data(const byte* ptr, size_t sz);
     virtual ssize_t write_string(const std::string& str);
     virtual ssize_t write_string(const char* str);
     virtual void    write_file(int file_desc, off64_t offset, off64_t length);
+    /**
+     * Flush data in blocking mode.
+     * @return Number of byte flushed. -1 means error.
+     */
     virtual ssize_t flush_data();
 
     bool    active() const { return !inactive_; }
+    /**
+     * Close this connection.
+     */
     void    close();
 };
 

@@ -1,5 +1,6 @@
 # -*- mode: python -*-
 from SCons import SConf
+import os
 
 source = ['utils/logger.cc',
           'utils/misc.cc',
@@ -118,8 +119,8 @@ if not env.GetOption('clean'):
 env.Command('http/http_parser.c', 'http/http_parser.rl', 'ragel -s -G2 $SOURCE -o $TARGET')
 
 libtube = env.SharedLibrary('tube', source=source)
-libtube_web = env.SharedLibrary('tube-web', source=http_source, LIBS=env['LIBS'] + [libtube])
-tube_server = env.Program('tube-server', source=http_server_source, LIBS=env['LIBS'] + ['tcmalloc', libtube, libtube_web])
+libtube_web = env.SharedLibrary('tube-web', source=http_source, LIBS=['$LIBS', 'libtube'])
+tube_server = env.Program('tube-server', source=http_server_source, LIBS=['$LIBS', 'libtube', 'libtube-web'])
 
 def GenTestProg(name, src):
     ldflags = [libtube, libtube_web]
