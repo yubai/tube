@@ -15,7 +15,7 @@ namespace tube {
  * Timer object are used for schedule a callback at a certain time.  Timer have
  * a different granularity than second, which is defined as Time::Unit.
  *
- * Timer is thread safe.
+ * Timer is not thread safe.
  */
 class Timer
 {
@@ -99,8 +99,8 @@ private:
 
     TimerTree    rbtree_;
     Unit         last_executed_;
-    utils::Mutex mutex_;
-    bool         nolock_;
+    // utils::Mutex mutex_;
+    // bool         nolock_;
 
     bool invoke_callback(TimerTree::iterator it);
 };
