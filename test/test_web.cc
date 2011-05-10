@@ -33,11 +33,12 @@ public:
 int
 main(int argc, char *argv[])
 {
+    ServerConfig& cfg = ServerConfig::instance();
+    cfg.set_config_filename(std::string("./test/test-conf.yaml"));
+    cfg.load_static_config();
     tube_module_initialize_all();
     WebServer server;
-    ServerConfig& cfg = ServerConfig::instance();
-
-    cfg.load_config_file("./test/test-conf.yaml");
+    cfg.load_config();
     server.bind(cfg.address().c_str(), cfg.port().c_str());
     server.initialize_stages();
     server.start_stages();

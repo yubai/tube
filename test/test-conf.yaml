@@ -6,6 +6,7 @@ thread_pool:
     parser: 2
     http_handler: 2
 
+write_back_mode: poll
 listen_queue_size: 32
 recycle_threshold: 16
 enable_cork: false

@@ -9,6 +9,8 @@
 
 #include "core/pipeline.h"
 #include "core/poller.h"
+#include "core/controller.h"
+#include "utils/misc.h"
 
 namespace tube {
 
@@ -28,6 +30,8 @@ protected:
     Pipeline&  pipeline_;
     size_t     thread_pool_size_;
 protected:
+    virtual int process_task(Connection* conn) { return 0; };
+public:
     /**
      * Constructor for Stage object
      * @param name Name of the Stage object.
@@ -35,8 +39,6 @@ protected:
     Stage(const std::string& name);
     virtual ~Stage() {}
 
-    virtual int process_task(Connection* conn) { return 0; };
-public:
     /**
      * Initialize the stage internal data structure.  Most implementation will
      * perform data look up in this routine.
@@ -70,11 +72,35 @@ public:
     /**
      * Start a single thread
      */
-    virtual void start_thread();
+    virtual utils::ThreadId start_thread();
     /**
      * Start all threads in the thread pool.
      */
     virtual void start_thread_pool();
+};
+
+class PollStage : public Stage
+{
+protected:
+    PollStage(const std::string& name);
+    virtual ~PollStage() {}
+
+    void add_poll(Poller* poller);
+public:
+    int timeout() const { return timeout_; }
+    /**
+     * Set maximum blocking time for IO poller, this is also the time grand
+     * for detecting idle connections.
+     * @return Timeout in seconds.
+     */
+    void set_timeout(int timeout) { timeout_ = timeout; }
+
+protected:
+    utils::Mutex         mutex_;
+    std::vector<Poller*> pollers_;
+    int                  timeout_;
+    size_t               current_poller_;
+    std::string          poller_name_;
 };
 
 /**
@@ -85,15 +111,8 @@ public:
  * blocking time for a poll() call.  In PollInStage, it can be tuned by calling
  * set_timeout() method.
  */
-class PollInStage : public Stage
+class PollInStage : public PollStage
 {
-    utils::Mutex      mutex_;
-
-    std::vector<Poller*> pollers_;
-    size_t               current_poller_;
-    std::string          poller_name_;
-    int                  timeout_;
-
     Stage* parser_stage_;
     Stage* recycle_stage_;
 public:
@@ -101,14 +120,6 @@ public:
 
     PollInStage();
     ~PollInStage();
-
-    int timeout() const { return timeout_; }
-    /**
-     * Set maximum blocking time for IO poller, this is also the time grand
-     * for detecting idle connections.
-     * @return Timeout in seconds.
-     */
-    void set_timeout(int timeout) { timeout_ = timeout; }
 
     virtual bool sched_add(Connection* conn);
     virtual void sched_remove(Connection* conn);
@@ -125,25 +136,42 @@ private:
     void cleanup_connection(Poller& poller, Connection* conn);
     void read_connection(Poller& poller, Connection* conn);
     bool cleanup_idle_connection_callback(Poller& poller, void* ptr);
-    void add_poll(Poller* poller);
     void handle_connection(Poller& poller, Connection* conn, PollerEvent evt);
     void post_handle_connection(Poller& poller);
 };
 
 /**
- * WriteBackStage is responsible for transfer the Writeable in the connection
- * back to client.  Since from the time connection is scheduled on this stage
- * it's already locked, so the scheduler is will not lock the connection on
- * pick_task().
+ * BlockOutStage is responsible for transfer the Writeable in the
+ * connection back to client.  Since from the time connection is scheduled on
+ * this stage it's already locked, so the scheduler is will not lock the
+ * connection on pick_task().
  */
-class WriteBackStage : public Stage
+class BlockOutStage : public Stage
 {
 public:
-    WriteBackStage();
-    virtual ~WriteBackStage();
+    BlockOutStage();
+    virtual ~BlockOutStage();
 
     virtual bool sched_add(Connection* conn);
     virtual int  process_task(Connection* conn);
+};
+
+/**
+ * PollOutStage is an alternative to BlockOutStage by using IO polling.  Compare
+ * to BlockOutStage, it's has very subtle system call overhead, but fair on slow
+ * connections.
+ */
+class PollOutStage : public PollStage
+{
+public:
+    PollOutStage();
+    virtual ~PollOutStage();
+
+    virtual bool sched_add(Connection* conn);
+    virtual void main_loop();
+private:
+    void cleanup_connection(Poller& poller, Connection* conn);
+    void handle_connection(Poller& poller, Connection* conn, PollerEvent evt);
 };
 
 /**

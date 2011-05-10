@@ -101,9 +101,12 @@ EpollPoller::handle_event(int timeout)
     struct epoll_event* epoll_evt = (struct epoll_event*)
         malloc(sizeof(struct epoll_event) * MAX_EVENT_PER_POLL);
     Connection* conn = NULL;
+    if (timeout > 0) {
+        timeout *= 1000;
+    }
     while (true) {
         int nfds = epoll_wait(epoll_fd_, epoll_evt, MAX_EVENT_PER_POLL,
-                              timeout * 1000);
+                              timeout);
         if (nfds < 0) {
             if (errno == EINTR) {
                 continue;

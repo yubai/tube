@@ -6,6 +6,7 @@
 #include "http/http_stages.h"
 #include "core/pipeline.h"
 #include "core/stages.h"
+#include "core/server.h"
 #include "utils/logger.h"
 #include "utils/misc.h"
 
@@ -277,9 +278,39 @@ ServerConfig::~ServerConfig()
 {}
 
 void
-ServerConfig::load_config_file(const char* filename)
+ServerConfig::load_static_config()
 {
-    std::ifstream fin(filename);
+    std::ifstream fin(config_filename_.c_str());
+    YAML::Parser parser(fin);
+    Node doc;
+    while (parser.GetNextDocument(doc)) {
+        for (YAML::Iterator it = doc.begin(); it != doc.end(); ++it) {
+            std::string key, value;
+            it.first() >> key;
+            if (key == "idle_timeout") {
+                it.second() >> value;
+                HttpConnectionFactory::kDefaultTimeout = atoi(value.c_str());
+            } else if (key == "enable_cork") {
+                it.second() >> value;
+                HttpConnectionFactory::kCorkEnabled = utils::parse_bool(value);
+            } else if (key == "write_back_mode") {
+                it.second() >> value;
+                if (utils::ignore_compare(value, "block")) {
+                    Server::kDefaultWriteBackMode = Server::kWriteBackModeBlock;
+                } else if (utils::ignore_compare(value, "poll")) {
+                    Server::kDefaultWriteBackMode = Server::kWriteBackModePoll;
+                } else {
+                    LOG(ERROR, "Invalid write_back_mode");
+                }
+            }
+        }
+    }
+}
+
+void
+ServerConfig::load_config()
+{
+    std::ifstream fin(config_filename_.c_str());
     YAML::Parser parser(fin);
     HandlerConfig& handler_cfg = HandlerConfig::instance();
     VHostConfig& host_cfg = VHostConfig::instance();
@@ -312,14 +343,9 @@ ServerConfig::load_config_file(const char* filename)
                         "default.");
                     listen_queue_size_ = 128;
                 }
-            } else if (key == "idle_timeout") {
-                it.second() >> value;
-                HttpConnectionFactory::kDefaultTimeout = atoi(value.c_str());
-            } else if (key == "enable_cork") {
-                it.second() >> value;
-                HttpConnectionFactory::kCorkEnabled = utils::parse_bool(value);
             }
-            LOG(INFO, "ignore unsupported key %s", key.c_str());
+
+            LOG(INFO, "Ignore unsupported key %s", key.c_str());
         }
     }
     if (recycle_threshold > 0) {

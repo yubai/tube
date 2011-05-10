@@ -17,6 +17,7 @@
 #include "core/stream.h"
 #include "core/inet_address.h"
 #include "core/timer.h"
+#include "core/controller.h"
 
 namespace tube {
 
@@ -39,6 +40,13 @@ public:
         void* data_ptr;
     };
 
+    enum Flags {
+        kFlagCorkEnabled      = 0x01,
+        kFlagActive           = 0x02,
+        kFlagCloseAfterFinish = 0x04,
+        kFlagUrgent           = 0x08,
+    };
+
     /**
      * @param sock The client socket.
      */
@@ -58,17 +66,25 @@ public:
     /**
      * @return True if client enabled tcp cork control
      */
-    bool is_cork_enabled() const { return cork_enabled_; }
+    bool is_cork_enabled() const { return (flags_ & kFlagCorkEnabled) != 0; }
     /**
      * @return True if client is not closed
      * @see set_cork(), clear_cok()
      */
-    bool is_active() const { return !inactive_; }
+    bool is_active() const { return (flags_ & kFlagActive) != 0; }
     /**
      * @return True if after tranfer complete, server is responsible to close
      * connection actively.
      */
-    bool is_close_after_finish() const { return close_after_finish_; }
+    bool is_close_after_finish() const {
+        return (flags_ & kFlagCloseAfterFinish) != 0;
+    }
+    /**
+     * @return True if connection needs to be handled urgently.
+     */
+    bool is_urgent() const {
+        return (flags_ & kFlagUrgent) != 0;
+    }
 
     /**
      * Set an internet address.  Usually performed after a accept()
@@ -90,17 +106,45 @@ public:
     /**
      * @param val True if enable TCP Cork contorl, false if disabled.
      */
-    void set_cork_enabled(bool val) { cork_enabled_ = val; }
+    void set_cork_enabled(bool val) {
+        if (val) {
+            flags_ |= kFlagCorkEnabled;
+        } else {
+            flags_ &= ~kFlagCorkEnabled;
+        }
+    }
     /**
      * Mark the connection active or inactive
      * @see set_cork(), clear_cork()
      */
-    void set_active(bool active) { inactive_ = !active; }
+    void set_active(bool active) {
+        if (active) {
+            flags_ |= kFlagActive;
+        } else {
+            flags_ &= ~kFlagActive;
+        }
+    }
     /**
-     * @param val if true, server will be responsible to close the connection
+     * @param val If true, server will be responsible to close the connection
      * actively after transfer complete.
      */
-    void set_close_after_finish(bool val) { close_after_finish_ = val; }
+    void set_close_after_finish(bool val) {
+        if (val) {
+            flags_ |= kFlagCloseAfterFinish;
+        } else {
+            flags_ &= ~kFlagCloseAfterFinish;
+        }
+    }
+    /**
+     * @param val If true, make this connection as urgent.
+     */
+    void set_urgent(bool val) {
+        if (val) {
+            flags_ |= kFlagUrgent;
+        } else {
+            flags_ &= ~kFlagUrgent;
+        }
+    }
 
     // timer related
     /**
@@ -175,8 +219,6 @@ protected:
 
     int       fd_;
     int       timeout_;
-    bool      cork_enabled_;
-    bool      inactive_;
 
     InternetAddress address_;
 
@@ -188,9 +230,11 @@ protected:
     utils::Mutex mutex_;
     long         owner_;
 
-    bool        close_after_finish_;
+    int         flags_;
     Timer::Unit last_active_;
 };
+
+class Controller;
 
 /**
  * Scheduler that schedule the client connection to stage processing routine.
@@ -205,6 +249,8 @@ protected:
  */
 class Scheduler : utils::Noncopyable
 {
+protected:
+    Controller* controller_;
 public:
     Scheduler();
     virtual ~Scheduler();
@@ -225,6 +271,14 @@ public:
      * Notify the scheduler to reschedule.
      */
     virtual void reschedule()                   = 0;
+    /**
+     * Number of task that this scheduler contains.
+     *
+     * This method is not thread-safe
+     */
+    virtual size_t size_nolock()                = 0;
+
+    void set_controller(Controller* controller) { controller_ = controller; }
 };
 
 /**
@@ -235,7 +289,7 @@ public:
  *
  * The QueueScheduler provides a non-locking option for not locking the
  * connection during pick_task() routine.  This option can be used for stages
- * such as WriteBackStage.
+ * such as BlockOutStage.
  */
 class QueueScheduler : public Scheduler
 {
@@ -261,7 +315,7 @@ public:
     /**
      * @param suppress_connection_lock Option to tell scheduler don't lock
      * the connection when pick_task().   This option can be used for stages
-     * such as WriteBackStage.
+     * such as BlockOutStage.
      */
     QueueScheduler(bool suppress_connection_lock = false);
     ~QueueScheduler();
@@ -270,20 +324,33 @@ public:
     /**
      * Pick a connection and remove it from scheduler.  When
      * suppress_connection_lock is set this routine will not lock the
-     * conenction, and this can be used in stages such as WriteBackStage
-     * @return The connection.
+     * conenction, and this can be used in stages such as BlockOutStage
+     * @return The connection. NULL means nothing to schedule and thread should
+     * exit therefore.
      */
     virtual Connection* pick_task();
     virtual void        remove_task(Connection* conn);
     virtual void        reschedule();
+    virtual size_t      size_nolock() { return list_.size(); }
 private:
     Connection* pick_task_nolock_connection();
     Connection* pick_task_lock_connection();
+
+    template <class LockType>
+    bool auto_wait(LockType& lk) {
+        if (controller_ && controller_->is_auto_created()) {
+            if (!cond_.timed_wait(lk, Controller::kMaxThreadIdle)) {
+                return false;
+            }
+        } else {
+            cond_.wait(lk);
+        }
+        return true;
+    }
 };
 
 class Stage;
 class PollInStage;
-class WriteBackStage;
 class RecycleStage;
 
 /**
@@ -316,7 +383,7 @@ class Pipeline : utils::Noncopyable
     utils::RWMutex mutex_;
 
     PollInStage*       poll_in_stage_;
-    WriteBackStage*    write_back_stage_;
+    Stage*             write_back_stage_;
     RecycleStage*      recycle_stage_;
     ConnectionFactory* factory_;
 
@@ -340,7 +407,7 @@ public:
     void set_connection_factory(ConnectionFactory* fac);
 
     PollInStage*    poll_in_stage() const { return poll_in_stage_; }
-    WriteBackStage* write_back_stage() const { return write_back_stage_; }
+    Stage*          write_back_stage() const { return write_back_stage_; }
     RecycleStage*   recycle_stage() const { return recycle_stage_; }
 
     /**

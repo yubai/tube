@@ -106,13 +106,18 @@ public:
         return ins;
     }
 
-    void load_config_file(const char* filename);
+    std::string config_filename() const { return config_filename_; }
+    void set_config_filename(const std::string& val) { config_filename_ = val; }
+
+    void load_static_config();
+    void load_config();
 
     std::string address() const { return address_; }
     std::string port() const { return port_; }
     int listen_queue_size() const { return listen_queue_size_; }
 
 private:
+    std::string config_filename_;
     std::string address_;
     std::string port_; // port can be a service, keep it as a string
     int         listen_queue_size_;

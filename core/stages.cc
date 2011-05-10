@@ -9,6 +9,7 @@
 #include "utils/misc.h"
 #include "core/stages.h"
 #include "core/pipeline.h"
+#include "core/controller.h"
 
 using namespace tube::utils;
 
@@ -53,6 +54,10 @@ Stage::main_loop()
     if (!sched_) return;
     while (true) {
         Connection* conn = sched_->pick_task();
+        if (conn == NULL) {
+            puts("auto destroy");
+            return;
+        }
         if (process_task(conn) >= 0) {
             conn->unlock();
             pipeline_.reschedule_all();
@@ -60,10 +65,11 @@ Stage::main_loop()
     }
 }
 
-void
+ThreadId
 Stage::start_thread()
 {
     Thread th(boost::bind(&Stage::main_loop, this));
+    return th.get_id();
 }
 
 void
@@ -74,15 +80,26 @@ Stage::start_thread_pool()
     }
 }
 
+PollStage::PollStage(const std::string& name)
+    : Stage(name), timeout_(-1), current_poller_(0),
+      poller_name_(PollerFactory::instance().default_poller_name())
+{
+}
+
+void
+PollStage::add_poll(Poller* poller)
+{
+    utils::Lock lk(mutex_);
+    pollers_.push_back(poller);
+}
+
 int PollInStage::kDefaultTimeout = 10;
 
 PollInStage::PollInStage()
-    : Stage("poll_in")
+    : PollStage("poll_in")
 {
     sched_ = NULL; // no scheduler, need to override ``sched_add``
     timeout_ = kDefaultTimeout; // 10s by default
-    poller_name_ = PollerFactory::instance().default_poller_name();
-    current_poller_ = 0;
 }
 
 PollInStage::~PollInStage()
@@ -90,13 +107,6 @@ PollInStage::~PollInStage()
     for (size_t i = 0; i < pollers_.size(); i++) {
         PollerFactory::instance().destroy_poller(pollers_[i]);
     }
-}
-
-void
-PollInStage::add_poll(Poller* poller)
-{
-    utils::Lock lk(mutex_);
-    pollers_.push_back(poller);
 }
 
 bool
@@ -111,7 +121,8 @@ PollInStage::sched_add(Connection* conn)
         boost::ref(poller), _1);
 
     poller.timer().replace(conn->timer_sched_time(), conn, callback);
-    return poller.add_fd(conn->fd(), conn, kPollerEventRead | kPollerEventHup);
+    return poller.add_fd(conn->fd(), conn, kPollerEventRead | kPollerEventHup
+                         | kPollerEventError);
 }
 
 void
@@ -259,43 +270,120 @@ PollInStage::main_loop()
     delete poller;
 }
 
-WriteBackStage::WriteBackStage()
+BlockOutStage::BlockOutStage()
     : Stage("write_back")
 {
     sched_ = new QueueScheduler(true); // suppress lock
 }
 
-WriteBackStage::~WriteBackStage()
+BlockOutStage::~BlockOutStage()
 {
     delete sched_;
 }
 
 bool
-WriteBackStage::sched_add(Connection* conn)
+BlockOutStage::sched_add(Connection* conn)
 {
     conn->set_cork();
+    pipeline_.disable_poll(conn);
     utils::set_socket_blocking(conn->fd(), true);
     Stage::sched_add(conn);
     return true;
 }
 
 int
-WriteBackStage::process_task(Connection* conn)
+BlockOutStage::process_task(Connection* conn)
 {
     OutputStream& out = conn->out_stream();
     int rs = out.write_into_output();
+    bool has_error = (rs < 0);
 
     if (!out.is_done() && rs > 0) {
-        sched_add(conn);
+        Stage::sched_add(conn);
         return -1;
     } else {
         conn->clear_cork();
-        utils::set_socket_blocking(conn->fd(), false);
-        if (conn->is_close_after_finish()) {
+        if (conn->is_close_after_finish() || has_error) {
             conn->active_close();
+        } else {
+            utils::set_socket_blocking(conn->fd(), false);
+            pipeline_.enable_poll(conn);
         }
         return 0; // done, and not to schedule it anymore
     }
+}
+
+PollOutStage::PollOutStage()
+    : PollStage("write_back")
+{}
+
+PollOutStage::~PollOutStage()
+{}
+
+bool
+PollOutStage::sched_add(Connection* conn)
+{
+    utils::Lock lk(mutex_);
+    current_poller_ = (current_poller_ + 1) % pollers_.size();
+    Poller& poller = *pollers_[current_poller_];
+    pipeline_.disable_poll(conn);
+    conn->set_cork();
+    return poller.add_fd(conn->fd(), conn, kPollerEventWrite | kPollerEventHup
+                         | kPollerEventError);
+}
+
+void
+PollOutStage::cleanup_connection(Poller& poller, Connection* conn)
+{
+    utils::Lock lk(mutex_);
+    poller.remove_fd(conn->fd());
+    conn->unlock();
+    pipeline_.reschedule_all();
+}
+
+void
+PollOutStage::handle_connection(Poller& poller, Connection* conn,
+                                PollerEvent evt)
+{
+    if ((evt & kPollerEventHup) || (evt & kPollerEventError)) {
+        conn->clear_cork();
+        conn->active_close();
+        cleanup_connection(poller, conn);
+    } else {
+        OutputStream& out = conn->out_stream();
+        int nwrite = 0;
+        bool has_error = false;
+        do {
+            nwrite = out.write_into_output();
+        } while (nwrite > 0);
+
+        if (nwrite < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+            has_error = true;
+        }
+
+        if (out.is_done() || has_error) {
+            conn->clear_cork();
+            if (conn->is_close_after_finish() || has_error) {
+                conn->active_close();
+            } else {
+                pipeline_.enable_poll(conn);
+            }
+            cleanup_connection(poller, conn);
+        }
+    }
+}
+
+void
+PollOutStage::main_loop()
+{
+    Poller* poller = PollerFactory::instance().create_poller(poller_name_);
+    Poller::EventCallback evthdl =
+        boost::bind(&PollOutStage::handle_connection, this, boost::ref(*poller),
+                    _1, _2);
+    poller->set_event_handler(evthdl);
+    add_poll(poller);
+    poller->handle_event(timeout_);
+    delete poller;
 }
 
 ParserStage::ParserStage()

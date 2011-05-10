@@ -57,6 +57,7 @@ public:
     List(AllocatorPool& pool) : mempool_(pool) {
         pool.initialize(sizeof(Node));
         sentinel_.prev = sentinel_.next = &sentinel_;
+        size_ = 0;
     }
 
     virtual ~List() {

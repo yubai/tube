@@ -100,6 +100,9 @@ int
 main(int argc, char* argv[])
 {
     parse_opt(argc, argv);
+    ServerConfig& cfg = ServerConfig::instance();
+    cfg.set_config_filename(conf_file);
+    cfg.load_static_config();
     if (global_uid >= 0) {
         if (setuid(global_uid) < 0) {
             perror("setuid");
@@ -108,9 +111,8 @@ main(int argc, char* argv[])
     }
     load_modules();
     WebServer server;
-    ServerConfig& cfg = ServerConfig::instance();
     try {
-        cfg.load_config_file(conf_file.c_str());
+        cfg.load_config();
         server.bind(cfg.address().c_str(), cfg.port().c_str());
         server.listen(cfg.listen_queue_size());
         server.initialize_stages();

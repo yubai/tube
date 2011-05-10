@@ -14,6 +14,7 @@ source = ['utils/logger.cc',
           'core/filesender.cc',
           'core/server.cc',
           'core/stages.cc',
+          'core/controller.cc',
           'core/wrapper.cc']
 
 http_source = ['http/http_parser.c',
@@ -123,17 +124,13 @@ libtube_web = env.SharedLibrary('tube-web', source=http_source, LIBS=['$LIBS', '
 tube_server = env.Program('tube-server', source=http_server_source, LIBS=['$LIBS', 'libtube', 'libtube-web'])
 
 def GenTestProg(name, src):
-    ldflags = [libtube, libtube_web]
-    if GetOS() == 'Linux' or GetOS() == 'SunOS':
-        ldflags.append('-Wl,-rpath=.')
-    env.Program(name, source=src, LINKFLAGS=[env['LINKFLAGS']] + ldflags)
+    env.Program(name, source=src, LIBS=['$LIBS', 'libtube', 'libtube-web'])
 
 GenTestProg('test/hash_server', 'test/hash_server.cc')
 GenTestProg('test/pingpong_server', 'test/pingpong_server.cc')
 GenTestProg('test/test_buffer', 'test/test_buffer.cc')
 GenTestProg('test/file_server', 'test/file_server.cc')
 GenTestProg('test/test_http_parser', 'test/test_http_parser.cc')
-GenTestProg('test/test_config', 'test/test_config.cc')
 GenTestProg('test/test_web', 'test/test_web.cc')
 
 # Install

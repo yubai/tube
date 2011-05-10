@@ -21,9 +21,15 @@ class Server
     size_t addr_size_;
 
     PollInStage*       poll_in_stage_;
-    WriteBackStage*    write_back_stage_;
     RecycleStage*      recycle_stage_;
+    Stage*             write_back_stage_;
 public:
+    enum WriteBackMode {
+        kWriteBackModeBlock,
+        kWriteBackModePoll
+    };
+
+    static WriteBackMode kDefaultWriteBackMode;
     Server();
     virtual ~Server();
 

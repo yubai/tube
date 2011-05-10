@@ -49,7 +49,7 @@ size_t Response::kMaxMemorySizes = (4 << 20);
 Response::Response(Connection* conn)
     : Wrapper(conn), max_mem_(kMaxMemorySizes), inactive_(false)
 {
-    out_stage_ = Pipeline::instance().find_stage("write_back");
+    out_stage_ = Pipeline::instance().write_back_stage();
 }
 
 Response::~Response()

@@ -32,13 +32,20 @@ lookup_addr(const char* host, const char* service)
     return info;
 }
 
+Server::WriteBackMode
+Server::kDefaultWriteBackMode = Server::kWriteBackModePoll;
+
 Server::Server()
-    : fd_(-1), addr_size_(0)
+    : fd_(-1), addr_size_(0), write_back_stage_(NULL)
 {
     // construct all essential stages
     poll_in_stage_ = new PollInStage();
-    write_back_stage_ = new WriteBackStage();
     recycle_stage_ = new RecycleStage();
+    if (kDefaultWriteBackMode == kWriteBackModeBlock) {
+        write_back_stage_ = new BlockOutStage();
+    } else if (kDefaultWriteBackMode == kWriteBackModePoll) {
+        write_back_stage_ = new PollOutStage();
+    }
 }
 
 Server::~Server()

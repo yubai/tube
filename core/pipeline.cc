@@ -12,11 +12,11 @@
 namespace tube {
 
 Connection::Connection(int sock)
-    : fd_(sock), timeout_(0), cork_enabled_(true), inactive_(false),
-      in_stream_(sock), out_stream_(sock), close_after_finish_(false),
+    : fd_(sock), timeout_(0), in_stream_(sock), out_stream_(sock),
       last_active_(0)
 {
     update_last_active();
+    flags_ = kFlagCorkEnabled | kFlagActive;
     // set nodelay
     int state = 1;
     setsockopt(fd_, IPPROTO_TCP, TCP_NODELAY, &state, sizeof(state));
@@ -49,7 +49,7 @@ Connection::active_close()
 void
 Connection::set_cork()
 {
-    if (!cork_enabled_) return;
+    if (!is_cork_enabled()) return;
 #ifdef __linux__
     int state = 1;
     if (setsockopt(fd_, IPPROTO_TCP, TCP_CORK, &state, sizeof(state)) < 0) {
@@ -61,13 +61,13 @@ Connection::set_cork()
 void
 Connection::clear_cork()
 {
-    if (!cork_enabled_) return;
+    if (!is_cork_enabled()) return;
 #ifdef __linux__
     int state = 0;
     if (setsockopt(fd_, IPPROTO_TCP, TCP_CORK, &state, sizeof(state)) < 0) {
         LOG(WARNING, "Cannot clear TCP_CORK on fd %d", fd_);
     }
-    ::fsync(fd_);
+    // ::fsync(fd_);
 #endif
 }
 
@@ -125,8 +125,8 @@ Connection::address_string() const
 }
 
 Scheduler::Scheduler()
+    : controller_(NULL)
 {
-
 }
 
 Scheduler::~Scheduler()
@@ -156,6 +156,10 @@ QueueScheduler::add_task(Connection* conn)
     }
     bool need_notify = (list_.size() == 0);
     nodes_.insert(conn->fd(), list_.push_back(conn));
+    // if controller exists, check auto create
+    if (controller_) {
+        controller_->auto_create(this);
+    }
 
     lk.unlock();
     if (need_notify) {
@@ -199,7 +203,9 @@ QueueScheduler::pick_task_nolock_connection()
 {
     utils::Lock lk(mutex_);
     while (list_.empty()) {
-        cond_.wait(lk);
+        if (!auto_wait(lk)) {
+            return NULL;
+        }
     }
     Connection* conn = list_.front();
     list_.pop_front();
@@ -212,7 +218,9 @@ QueueScheduler::pick_task_lock_connection()
 {
     QueueSchedulerPickScope lk(mutex_);
     while (list_.empty()) {
-        cond_.wait(lk);
+        if (!auto_wait(lk)) {
+            return NULL;
+        }
     }
 
 reschedule:
@@ -225,7 +233,9 @@ reschedule:
             return conn;
         }
     }
-    cond_.wait(lk);
+    if (!auto_wait(lk)) {
+        return NULL;
+    }
     goto reschedule;
 }
 
@@ -348,7 +358,7 @@ Pipeline::add_stage(const std::string& name, Stage* stage)
     if (name == "poll_in") {
         poll_in_stage_ = (PollInStage*) stage;
     } else if (name == "write_back") {
-        write_back_stage_ = (WriteBackStage*) stage;
+        write_back_stage_ = stage;
     } else if (name == "recycle") {
         recycle_stage_ = (RecycleStage*) stage;
     }
