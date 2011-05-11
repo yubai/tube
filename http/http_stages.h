@@ -42,6 +42,11 @@ public:
     virtual void sched_remove(Connection* conn);
 protected:
     int process_task(Connection* conn);
+private:
+    void trigger_handler(Connection* conn, HttpRequest& request,
+                         HttpResponse& response);
+    void log_respond(Connection* conn, HttpRequest& request,
+                     HttpResponse& response);
 };
 
 }

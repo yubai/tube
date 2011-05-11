@@ -37,16 +37,6 @@ set_fdtable_size(size_t size)
     setrlimit(RLIMIT_NOFILE, &lmt);
 }
 
-long
-get_thread_id()
-{
-#ifdef __linux__
-    return syscall(SYS_gettid);
-#else
-    return (long) pthread_self();
-#endif
-}
-
 bool
 ignore_compare(const std::string& p, const std::string& q)
 {

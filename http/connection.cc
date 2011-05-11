@@ -224,6 +224,7 @@ HttpConnection::finish_parse()
     tmp_request_.version_major = parser_.version_major;
     tmp_request_.version_minor = parser_.version_minor;
     tmp_request_.keep_alive = http_parser_should_keep_alive(&parser_);
+    tmp_request_.complete_uri = tmp_request_.uri;
 
     LOG(DEBUG, "parsed packet with content-length: %llu\n",
         tmp_request_.content_length);
@@ -236,8 +237,6 @@ HttpConnection::finish_parse()
             }
         }
     }
-    LOG(INFO, "[%s] %s from %s",  tmp_request_.method_string(),
-        tmp_request_.uri.c_str(), address_string().c_str());
     // matching the rule
     tmp_request_.url_rule = vhost_cfg.match_uri(host, tmp_request_);
 

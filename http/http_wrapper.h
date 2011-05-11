@@ -33,6 +33,8 @@ public:
     short       version_minor() const { return request_.version_minor; }
     bool        keep_alive() const { return request_.keep_alive; }
 
+    const std::string& complete_uri() const { return request_.complete_uri; }
+
     void set_uri(std::string uri) { request_.uri = uri; }
 
     const HttpHeaderEnumerate& headers() const { return request_.headers; }
@@ -105,6 +107,7 @@ protected:
     bool                use_prepare_buffer_;
     bool                has_content_length_;
     bool                is_responded_;
+    HttpResponseStatus  responded_status_;
 
 public:
     static const std::string kHttpVersion;
@@ -127,9 +130,14 @@ public:
 
     // write it into the prepared buffer
     virtual ssize_t write_data(const byte* ptr, size_t size);
-    virtual void respond(const HttpResponseStatus& status);
-    void respond_with_message(const HttpResponseStatus& status);
-    virtual void reset();
+
+    virtual void    respond(const HttpResponseStatus& status);
+    void            respond_with_message(const HttpResponseStatus& status);
+    virtual void    reset();
+
+    const HttpResponseStatus& responded_status() const {
+        return responded_status_;
+    }
 
     // C++ wrappers to write_string
     HttpResponse& operator<<(const std::string& str) {

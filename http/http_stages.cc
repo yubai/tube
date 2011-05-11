@@ -111,11 +111,56 @@ HttpHandlerStage::sched_remove(Connection* conn)
     Stage::sched_remove(conn);
 }
 
+void
+HttpHandlerStage::log_respond(Connection* conn, HttpRequest& request,
+                              HttpResponse& response)
+{
+    const HttpResponseStatus& status = response.responded_status();
+    int log_level = INFO;
+    if (status.status_code >= 400) {
+        log_level = ERROR;
+    }
+    LOG(log_level, "%s %s %d from %s", request.method_string().c_str(),
+        request.complete_uri().c_str(), status.status_code,
+        conn->address_string().c_str());
+}
+
+void
+HttpHandlerStage::trigger_handler(Connection* conn, HttpRequest& request,
+                                  HttpResponse& response)
+{
+    std::list<BaseHttpHandler*> chain;
+    if (request.url_rule_item()) {
+        chain = request.url_rule_item()->handlers;
+    } else {
+        // mis-configured, send an error
+        response.write_string("This url is not configured.");
+        response.respond(
+            HttpResponseStatus::kHttpResponseServiceUnavailable);
+        goto done;
+    }
+    if (request.keep_alive() && request.version_minor() == 0) {
+        response.add_header("Connection", "Keep-Alive");
+    }
+    for (UrlRuleItem::HandlerChain::iterator it = chain.begin();
+         it != chain.end(); ++it) {
+        BaseHttpHandler* handler = *it;
+        handler->handle_request(request, response);
+        if (response.is_responded())
+            goto done;
+    }
+    response.respond_with_message(
+        HttpResponseStatus::kHttpResponseServiceUnavailable);
+
+done:
+    log_respond(conn, request, response);
+    response.reset();
+}
+
 int
 HttpHandlerStage::process_task(Connection* conn)
 {
     HttpConnection* http_connection = (HttpConnection*) conn;
-    std::list<BaseHttpHandler*> chain;
     std::list<HttpRequestData>& client_requests =
         http_connection->get_request_data_list();
     HttpResponse response(conn);
@@ -126,30 +171,7 @@ HttpHandlerStage::process_task(Connection* conn)
             break;
         HttpRequest request(conn, client_requests.front());
         client_requests.pop_front();
-        if (request.url_rule_item()) {
-            chain = request.url_rule_item()->handlers;
-        } else {
-            // mis-configured, send an error
-            response.write_string("This url is not configured.");
-            response.respond(
-                HttpResponseStatus::kHttpResponseServiceUnavailable);
-            continue;
-        }
-        if (request.keep_alive() && request.version_minor() == 0) {
-            response.add_header("Connection", "Keep-Alive");
-        }
-        for (UrlRuleItem::HandlerChain::iterator it = chain.begin();
-             it != chain.end(); ++it) {
-            BaseHttpHandler* handler = *it;
-            handler->handle_request(request, response);
-            if (response.is_responded())
-                break;
-        }
-        if (!response.is_responded()) {
-            response.respond_with_message(
-                HttpResponseStatus::kHttpResponseServiceUnavailable);
-        }
-        response.reset();
+        trigger_handler(conn, request, response);
         if (!request.keep_alive()) {
             LOG(DEBUG, "active close after transfer finish");
             conn->set_close_after_finish(true);

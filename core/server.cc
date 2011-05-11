@@ -127,7 +127,7 @@ Server::main_loop()
         conn->set_address(address);
         utils::set_socket_blocking(conn->fd(), false);
 
-        LOG(INFO, "accepted connection from %s",
+        LOG(DEBUG, "accepted connection from %s",
             conn->address_string().c_str());
         stage->sched_add(conn);
     }

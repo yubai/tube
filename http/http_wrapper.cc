@@ -225,7 +225,8 @@ const std::string HttpResponse::kHttpVersion = "HTTP/1.1";
 const std::string HttpResponse::kHttpNewLine = "\r\n";
 const std::string HttpResponse::kHtmlNewLine = "\n";
 
-HttpResponse::HttpResponse(Connection* conn) : Response(conn)
+HttpResponse::HttpResponse(Connection* conn)
+    : Response(conn), responded_status_(0, "")
 {
     reset();
 }
@@ -287,6 +288,7 @@ HttpResponse::respond(const HttpResponseStatus& status)
         conn_->out_stream().append_buffer(prepare_buffer_);
     }
     is_responded_ = true;
+    responded_status_ = status;
 }
 
 void

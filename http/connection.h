@@ -27,6 +27,7 @@ struct HttpRequestData
     HttpHeaderEnumerate headers;
     std::string         path;
     std::string         uri;
+    std::string         complete_uri;
     std::string         query_string;
     std::string         fragment;
     Buffer              chunk_buffer;

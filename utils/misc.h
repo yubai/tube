@@ -50,17 +50,9 @@ typedef boost::posix_time::milliseconds TimeMilliseconds;
 
 void set_socket_blocking(int fd, bool block);
 void set_fdtable_size(size_t sz);
-long get_thread_id();
 
-struct PtrHashFunc
-{
-    size_t operator()(void* const x) const {
-        return (size_t) x;
-    }
-};
-
-bool      ignore_compare(const std::string& p, const std::string& q);
-bool      parse_bool(const std::string str);
+bool ignore_compare(const std::string& p, const std::string& q);
+bool parse_bool(const std::string str);
 
 }
 }
