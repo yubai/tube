@@ -8,22 +8,27 @@
 
 namespace tube {
 
-class Scheduler;
 class Stage;
 
 /**
  * Controller is to control the thread pool size adaptively according to the
- * current queue size.
+ * current stage load.
  */
 class Controller
 {
-    size_t                    last_queue_size_;
+    utils::Mutex              mutex_;
     std::set<utils::ThreadId> auto_threads_;
-    size_t                    sched_count_;
 
-    Stage*     stage_;
+    std::vector<long> load_history_;
+    size_t            reserve_;
+    Stage*            stage_;
+    long              current_load_;
+    long              current_speed_;
+    long              best_speed_;
+    size_t            best_threads_size_;
 public:
     static utils::TimeMilliseconds kMaxThreadIdle;
+    static utils::TimeMilliseconds kCheckAutoCreate;
 
     Controller();
     virtual ~Controller() {}
@@ -32,7 +37,15 @@ public:
 
     bool is_auto_created(utils::ThreadId id);
     bool is_auto_created();
-    void auto_create(Scheduler* sched);
+    void exit_auto_thread(utils::ThreadId id);
+    void exit_auto_thread();
+
+    void increase_load(long inc);
+    void decrease_load(long dec);
+
+private:
+    void check_thread();
+    bool check_auto_create();
 };
 
 }

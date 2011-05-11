@@ -279,6 +279,7 @@ public:
     virtual size_t size_nolock()                = 0;
 
     void set_controller(Controller* controller) { controller_ = controller; }
+    Controller* controller() const { return controller_; }
 };
 
 /**
@@ -340,6 +341,7 @@ private:
     bool auto_wait(LockType& lk) {
         if (controller_ && controller_->is_auto_created()) {
             if (!cond_.timed_wait(lk, Controller::kMaxThreadIdle)) {
+                controller_->exit_auto_thread();
                 return false;
             }
         } else {

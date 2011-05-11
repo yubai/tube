@@ -27,15 +27,19 @@ public:
     virtual void initialize();
 protected:
     int process_task(Connection* conn);
+    void increase_load(long load);
 };
 
 class HttpHandlerStage : public Stage
 {
 public:
-    static const int kMaxContinuesRequestNumber;
+    static int kMaxContinuesRequestNumber;
+    static bool kAutoTuning;
 
     HttpHandlerStage();
     virtual ~HttpHandlerStage();
+
+    virtual void sched_remove(Connection* conn);
 protected:
     int process_task(Connection* conn);
 };

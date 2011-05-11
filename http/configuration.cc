@@ -29,7 +29,7 @@ HandlerConfig::load_handler(const Node& subdoc)
     subdoc["module"] >> module;
     BaseHttpHandler* handler = create_handler_instance(name, module);
     if (handler == NULL) {
-        LOG(ERROR, "Cannot create handler instance %s", module.c_str());
+        LOG(ERROR, "cannot create handler instance %s", module.c_str());
         return;
     }
     for (YAML::Iterator it = subdoc.begin(); it != subdoc.end(); ++it) {
@@ -177,7 +177,7 @@ UrlRuleConfig::load_url_rule(const Node& subdoc)
         if (handler != NULL) {
             rule.handlers.push_back(handler);
         } else {
-            LOG(WARNING, "Cannot find handler instance %s", name.c_str());
+            LOG(WARNING, "cannot find handler instance %s", name.c_str());
         }
     }
     rules_.push_back(rule);
@@ -258,12 +258,12 @@ ThreadPoolConfig::load_thread_pool_config(const Node& subdoc)
         pool_size = atoi(value.c_str());
         stage = pipeline_.find_stage(key);
         if (stage == NULL) {
-            LOG(ERROR, "Cannot find stage %s for setting thread pool size",
+            LOG(ERROR, "cannot find stage %s for setting thread pool size",
                 key.c_str());
             continue;
         }
         if (pool_size <= 0) {
-            LOG(ERROR, "Invalid pool size %d", pool_size);
+            LOG(ERROR, "invalid pool size %d", pool_size);
             continue;
         }
         stage->set_thread_pool_size(pool_size);
@@ -300,8 +300,11 @@ ServerConfig::load_static_config()
                 } else if (utils::ignore_compare(value, "poll")) {
                     Server::kDefaultWriteBackMode = Server::kWriteBackModePoll;
                 } else {
-                    LOG(ERROR, "Invalid write_back_mode");
+                    LOG(ERROR, "invalid write_back_mode");
                 }
+            } else if (key == "handler_auto_tuning") {
+                it.second() >> value;
+                HttpHandlerStage::kAutoTuning = utils::parse_bool(value);
             }
         }
     }
@@ -339,13 +342,11 @@ ServerConfig::load_config()
                 it.second() >> value;
                 listen_queue_size_ = atoi(value.c_str());
                 if (listen_queue_size_ <= 0) {
-                    LOG(ERROR, "Invalid listen_queue_size, fallback to "
+                    LOG(ERROR, "invalid listen_queue_size, fallback to "
                         "default.");
                     listen_queue_size_ = 128;
                 }
             }
-
-            LOG(INFO, "Ignore unsupported key %s", key.c_str());
         }
     }
     if (recycle_threshold > 0) {

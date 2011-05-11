@@ -133,7 +133,8 @@ Scheduler::~Scheduler()
 {
 }
 
-size_t QueueScheduler::kMemoryPoolSize = 320 << 10;
+size_t
+QueueScheduler::kMemoryPoolSize = 320 << 10;
 
 QueueScheduler::QueueScheduler(bool suppress_connection_lock)
     : Scheduler(), pool_(kMemoryPoolSize), list_(pool_),
@@ -156,11 +157,6 @@ QueueScheduler::add_task(Connection* conn)
     }
     bool need_notify = (list_.size() == 0);
     nodes_.insert(conn->fd(), list_.push_back(conn));
-    // if controller exists, check auto create
-    if (controller_) {
-        controller_->auto_create(this);
-    }
-
     lk.unlock();
     if (need_notify) {
         cond_.notify_all();

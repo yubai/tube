@@ -4,9 +4,11 @@ thread_pool:
     poll_in: 1
     write_back: 2
     parser: 2
-    http_handler: 2
+    http_handler: 1
 
 write_back_mode: poll
+handler_auto_tuning: true
+
 listen_queue_size: 32
 recycle_threshold: 16
 enable_cork: false

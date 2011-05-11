@@ -19,7 +19,7 @@ Stage::Stage(const std::string& name)
     : pipeline_(Pipeline::instance()), thread_pool_size_(1)
 {
     sched_ = NULL;
-    LOG(INFO, "adding %s stage to pipeline", name.c_str());
+    LOG(DEBUG, "adding %s stage to pipeline", name.c_str());
     pipeline_.add_stage(name, this);
 }
 
@@ -55,7 +55,7 @@ Stage::main_loop()
     while (true) {
         Connection* conn = sched_->pick_task();
         if (conn == NULL) {
-            puts("auto destroy");
+            LOG(INFO, "server loads low, destroy auto-created thread.");
             return;
         }
         if (process_task(conn) >= 0) {

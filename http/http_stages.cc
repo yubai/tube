@@ -43,35 +43,73 @@ HttpParserStage::initialize()
 HttpParserStage::~HttpParserStage()
 {}
 
+void
+HttpParserStage::increase_load(long load)
+{
+    Scheduler* scheduler = handler_stage_->scheduler();
+    if (scheduler != NULL && scheduler->controller()) {
+        scheduler->controller()->increase_load(load);
+    }
+}
+
 int
 HttpParserStage::process_task(Connection* conn)
 {
     Request req(conn);
     HttpConnection* http_connection = (HttpConnection*) conn;
+    size_t orig_size = http_connection->get_request_data_list().size();
+
     if (!http_connection->do_parse()) {
         // FIXME: if the protocol client sent is not HTTP, is it OK to close
         // the connection right away?
         LOG(WARNING, "corrupted protocol from %s. closing...",
             conn->address_string().c_str());
+        increase_load(-1 * http_connection->get_request_data_list().size());
         conn->active_close();
     }
-    if (!http_connection->get_request_data_list().empty()) {
+    std::list<HttpRequestData>& request_data_list =
+        http_connection->get_request_data_list();
+    if (!request_data_list.empty()) {
+        // notify the controller increase the current load
+        increase_load(request_data_list.size() - orig_size);
         // add it into the next stage
         handler_stage_->sched_add(conn);
     }
     return 0; // release the lock whatever happened
 }
 
-const int HttpHandlerStage::kMaxContinuesRequestNumber = 3;
+int
+HttpHandlerStage::kMaxContinuesRequestNumber = 3;
+
+bool
+HttpHandlerStage::kAutoTuning = false;
 
 HttpHandlerStage::HttpHandlerStage()
     : Stage("http_handler")
 {
     sched_ = new QueueScheduler();
+    if (kAutoTuning) {
+        sched_->set_controller(new Controller());
+        sched_->controller()->set_stage(this);
+        LOG(INFO, "auto-tuning for handler stage enabled.");
+    }
 }
 
 HttpHandlerStage::~HttpHandlerStage()
-{}
+{
+    delete sched_->controller();
+}
+
+void
+HttpHandlerStage::sched_remove(Connection* conn)
+{
+    HttpConnection* http_connection = (HttpConnection*) conn;
+    if (sched_->controller()) {
+        sched_->controller()->increase_load(
+            -1 * http_connection->get_request_data_list().size());
+    }
+    Stage::sched_remove(conn);
+}
 
 int
 HttpHandlerStage::process_task(Connection* conn)
@@ -81,6 +119,7 @@ HttpHandlerStage::process_task(Connection* conn)
     std::list<HttpRequestData>& client_requests =
         http_connection->get_request_data_list();
     HttpResponse response(conn);
+    size_t orig_size = client_requests.size();
 
     for (int i = 0; i < kMaxContinuesRequestNumber; i++) {
         if (client_requests.empty())
@@ -122,6 +161,9 @@ HttpHandlerStage::process_task(Connection* conn)
         sched_add(conn);
     }
 done:
+    if (sched_->controller()) {
+        sched_->controller()->decrease_load(orig_size - client_requests.size());
+    }
     return response.response_code();
 }
 

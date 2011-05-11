@@ -1,24 +1,24 @@
 #include <cstdio>
+#include <cstdlib>
 
 #include "core/controller.h"
 #include "core/pipeline.h"
 #include "core/stages.h"
+#include "utils/logger.h"
 
 namespace tube {
 
-static const size_t kSchedAddCount = 100;
-static const double kCreateRadio = 0.86;
-
 Controller::Controller()
-    : stage_(NULL)
+    : reserve_(0), stage_(NULL), current_load_(0), current_speed_(0),
+      best_speed_(0), best_threads_size_(0)
 {
-    last_queue_size_ = 0;
-    sched_count_ = 0;
+    utils::Thread th(boost::bind(&Controller::check_thread, this));
 }
 
 bool
 Controller::is_auto_created(utils::ThreadId id)
 {
+    utils::Lock lk(mutex_);
     if (auto_threads_.find(id) != auto_threads_.end()) {
         return true;
     }
@@ -31,29 +31,120 @@ Controller::is_auto_created()
     return is_auto_created(boost::this_thread::get_id());
 }
 
+void
+Controller::exit_auto_thread(utils::ThreadId id)
+{
+    utils::Lock lk(mutex_);
+    auto_threads_.erase(id);
+}
+
+void
+Controller::exit_auto_thread()
+{
+    exit_auto_thread(boost::this_thread::get_id());
+}
+
+void
+Controller::increase_load(long inc)
+{
+    utils::Lock lk(mutex_);
+    current_load_ += inc;
+}
+
+void
+Controller::decrease_load(long dec)
+{
+    utils::Lock lk(mutex_);
+    current_load_ -= dec;
+    current_speed_ += dec;
+}
+
 utils::TimeMilliseconds
 Controller::kMaxThreadIdle = utils::TimeMilliseconds(500);
 
-void
-Controller::auto_create(Scheduler* sched)
+utils::TimeMilliseconds
+Controller::kCheckAutoCreate = utils::TimeMilliseconds(300);
+
+static const size_t
+kMaxFeedback = 16;
+
+static const size_t
+kMinFeedback = 8;
+
+static const long
+kMinLoad = 15;
+
+static const size_t
+kMaxThread = 128;
+
+static const size_t
+kDecisionHistoryNumber = 16;
+
+bool
+Controller::check_auto_create()
 {
-    if (stage_ == NULL) {
-        return;
+    utils::Lock lk(mutex_);
+    if (load_history_.size() == kMaxFeedback) {
+        load_history_.erase(load_history_.begin());
     }
-    sched_count_++;
-    // only auto create thread when kSchedCount has been exceeded.
-    if (sched_count_ < kSchedAddCount) {
-        return;
+    load_history_.push_back(current_load_);
+
+    size_t at_size = auto_threads_.size();
+    size_t lh_size = load_history_.size();
+
+    if (best_speed_ < current_speed_) {
+        best_speed_ = current_speed_;
+        best_threads_size_ = at_size;
     }
-    // TODO: more sophisticated auto create mechanism?
-    sched_count_ = 0;
-    size_t current_size = sched->size_nolock();
-    int delta_size = current_size - last_queue_size_;
-    if (1.0 * delta_size > kCreateRadio * kSchedAddCount) {
-        printf("%d auto create\n", delta_size);
-        auto_threads_.insert(stage_->start_thread());
+    current_speed_ = 0;
+
+    if (reserve_ > 0) {
+        reserve_--;
+        return false;
     }
-    last_queue_size_ = current_size;
+
+    if (at_size > kMaxThread) {
+        return false;
+    }
+
+    if (lh_size < kMinFeedback) {
+        return false;
+    }
+
+    if (best_threads_size_ < at_size) {
+        return false;
+    }
+
+    long sum_last = 0;
+    long sum_now = 0;
+    for (size_t i = 0; i < lh_size; i++) {
+        long load = load_history_[i];
+        if (i < lh_size / 2) {
+            sum_last += load;
+        } else if (i >= (lh_size + 1) / 2) {
+            if (load < kMinLoad) {
+                return false;
+            }
+            sum_now += load;
+        }
+    }
+    if (sum_last > sum_now) {
+        return false;
+    }
+    reserve_ = kMaxFeedback;
+    return true;
+}
+
+void
+Controller::check_thread()
+{
+    while (true) {
+        boost::this_thread::sleep(kCheckAutoCreate);
+        if (check_auto_create()) {
+            LOG(INFO, "server loads high, auto-create a new thread.");
+            auto_threads_.insert(stage_->start_thread());
+        }
+    }
 }
 
 }

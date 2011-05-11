@@ -17,7 +17,7 @@ StdLogWriter::write_log(const char* str)
     fprintf(stderr, "%s\n", str);
 }
 
-FileLogWriter::FileLogWriter(const char* filename) 
+FileLogWriter::FileLogWriter(const char* filename)
 {
     fp_ = fopen(filename, "a+");
     if (fp_ == NULL)
@@ -38,7 +38,7 @@ FileLogWriter::write_log(const char* str)
 
 Logger::Logger()
 {
-    current_level_ = WARNING;
+    current_level_ = INFO;
     const char* log_file = getenv("LOG_FILE");
     if (log_file != NULL) {
         writer_ = new FileLogWriter(log_file);
