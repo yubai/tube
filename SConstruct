@@ -29,7 +29,7 @@ essential_cflags = '-pipe -Wall'
 cflags = '-g'
 inc_path = ['.']
 
-profile = (ARGUMENTS.get('profile', 0) == '1')
+profile = (ARGUMENTS.get('profile') == '1')
 
 if GetOS() == 'FreeBSD':
     inc_path.append('/usr/local/include')

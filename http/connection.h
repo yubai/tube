@@ -55,6 +55,7 @@ class HttpConnection : public Connection
     HttpRequestData tmp_request_;
     std::string     last_header_key_;
     std::string     last_header_value_;
+    u64             bytes_should_skip_;
 
 public:
 
@@ -62,6 +63,9 @@ public:
 
     HttpConnection(int fd);
     virtual ~HttpConnection() {}
+
+    void set_bytes_should_skip(u64 val) { bytes_should_skip_ = val; }
+    u64  bytes_should_skip() const { return bytes_should_skip_; }
 
     void append_field(const char* ptr, size_t sz);
     void append_value(const char* ptr, size_t sz);

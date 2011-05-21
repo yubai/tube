@@ -176,9 +176,21 @@ HttpResponseStatus::HttpResponseStatus(int code,
     : status_code(code), reason(reason_string)
 {}
 
-HttpRequest::HttpRequest(Connection* conn, const HttpRequestData& request)
+HttpRequest::HttpRequest(HttpConnection* conn, const HttpRequestData& request)
     : Request(conn), request_(request)
 {
+    conn->set_bytes_should_skip(request.content_length);
+}
+
+ssize_t
+HttpRequest::read_data(byte* ptr, size_t size)
+{
+    ssize_t nread = Request::read_data(ptr, size);
+    HttpConnection* conn = (HttpConnection*) conn_;
+    if (nread > 0) {
+        conn->set_bytes_should_skip(conn->bytes_should_skip() - nread);
+    }
+    return nread;
 }
 
 std::string
@@ -225,7 +237,7 @@ const std::string HttpResponse::kHttpVersion = "HTTP/1.1";
 const std::string HttpResponse::kHttpNewLine = "\r\n";
 const std::string HttpResponse::kHtmlNewLine = "\n";
 
-HttpResponse::HttpResponse(Connection* conn)
+HttpResponse::HttpResponse(HttpConnection* conn)
     : Response(conn), responded_status_(0, "")
 {
     reset();

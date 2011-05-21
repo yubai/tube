@@ -43,7 +43,7 @@ public:
      * @param size Maximum size to be read.
      * @return Number of bytes read, -1 means error.
      */
-    ssize_t read_data(byte* ptr, size_t sz);
+    virtual ssize_t read_data(byte* ptr, size_t sz);
 };
 
 class Response : public Wrapper

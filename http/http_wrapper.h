@@ -16,7 +16,9 @@ class HttpRequest : public Request
 protected:
     HttpRequestData request_;
 public:
-    HttpRequest(Connection* conn, const HttpRequestData& request);
+    HttpRequest(HttpConnection* conn, const HttpRequestData& request);
+
+    virtual ssize_t read_data(byte* ptr, size_t size);
 
     static std::string url_decode(const std::string& url);
 
@@ -114,7 +116,7 @@ public:
     static const std::string kHttpNewLine;
     static const std::string kHtmlNewLine;
 
-    HttpResponse(Connection* conn);
+    HttpResponse(HttpConnection* conn);
 
     void add_header(const std::string& key, const std::string& value);
 

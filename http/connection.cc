@@ -94,7 +94,7 @@ HttpRequestData::clear()
 }
 
 HttpConnection::HttpConnection(int fd)
-    : Connection(fd)
+    : Connection(fd), bytes_should_skip_(0)
 {
     http_parser_init(&parser_, HTTP_REQUEST);
     parser_.data = this;
@@ -116,12 +116,25 @@ const size_t HttpConnection::kMaxBodySize = 16 << 10;
 bool
 HttpConnection::do_parse()
 {
+    Buffer& buf = in_stream().buffer();
     if (!requests_.empty() && requests_.back().content_length > 0) {
         // here, we don't consume the buffer, we'll leave the buffer to the
         // application to consume it, since it's a stream
         return true;
     }
-    Buffer& buf = in_stream().buffer();
+    if (bytes_should_skip_ != 0) {
+        // skip bytes as they are posted data but not be consumed by
+        // http handler.
+        if (buf.size() > bytes_should_skip_) {
+            buf.pop(bytes_should_skip_);
+            bytes_should_skip_ = 0;
+        } else {
+            bytes_should_skip_ -= buf.size();
+            buf.clear();
+            return true;
+        }
+    }
+
     size_t nconsumed = 0;
     for (Buffer::PageIterator it = buf.page_begin(); it != buf.page_end();
          ++it) {

@@ -126,12 +126,13 @@ tube_server = env.Program('tube-server', source=http_server_source, LIBS=['$LIBS
 def GenTestProg(name, src):
     env.Program(name, source=src, LIBS=['$LIBS', 'libtube', 'libtube-web'])
 
-GenTestProg('test/hash_server', 'test/hash_server.cc')
-GenTestProg('test/pingpong_server', 'test/pingpong_server.cc')
-GenTestProg('test/test_buffer', 'test/test_buffer.cc')
-GenTestProg('test/file_server', 'test/file_server.cc')
-GenTestProg('test/test_http_parser', 'test/test_http_parser.cc')
-GenTestProg('test/test_web', 'test/test_web.cc')
+if ARGUMENTS.get('testcase') == '1':
+    GenTestProg('test/hash_server', 'test/hash_server.cc')
+    GenTestProg('test/pingpong_server', 'test/pingpong_server.cc')
+    GenTestProg('test/test_buffer', 'test/test_buffer.cc')
+    GenTestProg('test/file_server', 'test/file_server.cc')
+    GenTestProg('test/test_http_parser', 'test/test_http_parser.cc')
+    GenTestProg('test/test_web', 'test/test_web.cc')
 
 # Install
 env.Alias('install', [

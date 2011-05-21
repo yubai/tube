@@ -58,6 +58,7 @@ HttpParserStage::process_task(Connection* conn)
     Request req(conn);
     HttpConnection* http_connection = (HttpConnection*) conn;
     size_t orig_size = http_connection->get_request_data_list().size();
+    size_t delta = 0;
 
     if (!http_connection->do_parse()) {
         // FIXME: if the protocol client sent is not HTTP, is it OK to close
@@ -67,11 +68,10 @@ HttpParserStage::process_task(Connection* conn)
         increase_load(-1 * http_connection->get_request_data_list().size());
         conn->active_close();
     }
-    std::list<HttpRequestData>& request_data_list =
-        http_connection->get_request_data_list();
-    if (!request_data_list.empty()) {
+    if (http_connection->is_ready()) {
+        delta = http_connection->get_request_data_list().size() - orig_size;
         // notify the controller increase the current load
-        increase_load(request_data_list.size() - orig_size);
+        increase_load(delta);
         // add it into the next stage
         handler_stage_->sched_add(conn);
     }
@@ -163,13 +163,13 @@ HttpHandlerStage::process_task(Connection* conn)
     HttpConnection* http_connection = (HttpConnection*) conn;
     std::list<HttpRequestData>& client_requests =
         http_connection->get_request_data_list();
-    HttpResponse response(conn);
+    HttpResponse response(http_connection);
     size_t orig_size = client_requests.size();
 
     for (int i = 0; i < kMaxContinuesRequestNumber; i++) {
         if (client_requests.empty())
             break;
-        HttpRequest request(conn, client_requests.front());
+        HttpRequest request(http_connection, client_requests.front());
         client_requests.pop_front();
         trigger_handler(conn, request, response);
         if (!request.keep_alive()) {
