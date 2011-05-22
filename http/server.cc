@@ -35,6 +35,7 @@ public:
 
 }
 
+static std::string pid_file;
 static std::string conf_file;
 static std::string module_path;
 static int global_uid = -1;
@@ -42,11 +43,13 @@ static int global_uid = -1;
 static void
 show_usage(int argc, char* argv[])
 {
-    printf("Usage: %s -c config_file [ -m module_path -u uid ]\n", argv[0]);
+    printf("Usage: %s -c config_file [ -m module_path -u uid -p pidfile ]\n",
+           argv[0]);
     puts("");
     puts("  -c\t\t Specify the configuration file. Required.");
     puts("  -m\t\t Specify the module path. Optional.");
     puts("  -u\t\t Set uid before server starts. Optional.");
+    puts("  -p\t\t Output pid into a file. Optional");
     puts("  -h\t\t Help");
     exit(-1);
 }
@@ -55,8 +58,11 @@ static void
 parse_opt(int argc, char* argv[])
 {
     int opt = 0;
-    while ((opt = getopt(argc, argv, "c:m:u:h")) != -1) {
+    while ((opt = getopt(argc, argv, "p:c:m:u:h")) != -1) {
         switch (opt) {
+        case 'p':
+            pid_file = std::string(optarg);
+            break;
         case 'c':
             conf_file = std::string(optarg);
             break;
@@ -82,35 +88,46 @@ parse_opt(int argc, char* argv[])
 }
 
 static void
-load_modules()
-{
-    tube_module_load_dir(module_path.c_str());
-    tube_module_initialize_all();
-}
-
-using namespace tube;
-
-static void
-on_quit_signal(int sig)
-{
-    exit(0);
-}
-
-int
-main(int argc, char* argv[])
+webserver_init(int argc, char* argv[])
 {
     parse_opt(argc, argv);
-    ServerConfig& cfg = ServerConfig::instance();
-    cfg.set_config_filename(conf_file);
-    cfg.load_static_config();
+
+    // setting up uid
     if (global_uid >= 0) {
         if (setuid(global_uid) < 0) {
             perror("setuid");
             exit(-1);
         }
     }
-    load_modules();
-    WebServer server;
+    // output pid to pid_file
+    if (pid_file != "") {
+        std::ofstream fout(pid_file.c_str());
+        fout << getpid();
+    }
+
+    // loading the configuration files
+    tube::ServerConfig& cfg = tube::ServerConfig::instance();
+    cfg.set_config_filename(conf_file);
+    cfg.load_static_config();
+
+    // laoding and initialize all modules
+    tube_module_load_dir(module_path.c_str());
+    tube_module_initialize_all();
+}
+
+static void
+on_quit_signal(int sig)
+{
+    exit(0);
+
+}
+
+int
+main(int argc, char* argv[])
+{
+    webserver_init(argc, argv);
+    tube::ServerConfig& cfg = tube::ServerConfig::instance();
+    tube::WebServer server;
     try {
         cfg.load_config();
         server.bind(cfg.address().c_str(), cfg.port().c_str());
@@ -120,7 +137,7 @@ main(int argc, char* argv[])
         ::signal(SIGINT, on_quit_signal);
 
         server.main_loop();
-    } catch (utils::SyscallException ex) {
+    } catch (tube::utils::SyscallException ex) {
         fprintf(stderr, "Cannot start server: %s\n", ex.what());
         exit(-1);
     } catch (const std::invalid_argument& ex) {
