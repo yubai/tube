@@ -40,6 +40,7 @@ public:
                                 HttpRequest& request,
                                 HttpResponse& response);
 private:
+    bool is_request_compression(HttpRequest& request);
     bool validate_client_cache(const std::string& path, struct stat64 stat,
                                HttpRequest& request);
     int  try_open_file(const std::string& path, HttpRequest& request,

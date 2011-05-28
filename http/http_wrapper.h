@@ -11,6 +11,20 @@
 
 namespace tube {
 
+struct HttpHeaderQualityValue
+{
+    std::string value;
+    double      quality;
+    bool        has_quality;
+
+    HttpHeaderQualityValue(const std::string& val, double q)
+        : value(val), quality(q), has_quality(true) {}
+    HttpHeaderQualityValue(const std::string& val)
+        : value(val), quality(0), has_quality(false) {}
+};
+
+typedef std::vector<HttpHeaderQualityValue> HttpHeaderQualityValues;
+
 class HttpRequest : public Request
 {
 protected:
@@ -44,6 +58,8 @@ public:
 
     bool has_header(const std::string& key) const;
     std::vector<std::string> find_header_values(const std::string& key) const;
+    HttpHeaderQualityValues find_header_quality_values(
+        const std::string& key) const;
     std::string find_header_value(const std::string& key) const;
     const UrlRuleItem* url_rule_item() const { return request_.url_rule; }
 

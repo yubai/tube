@@ -222,6 +222,58 @@ HttpRequest::find_header_values(const std::string& key) const
     return result;
 }
 
+static const std::string kHttpQualityIndicator = ";q=";
+
+static HttpHeaderQualityValue
+parse_quality_value(const std::string& str)
+{
+    size_t pos = str.find(kHttpQualityIndicator);
+    if (pos == std::string::npos) {
+        return HttpHeaderQualityValue(str);
+    } else {
+        std::string value = str.substr(0, pos);
+        std::string quality = str.substr(pos + kHttpQualityIndicator.length());
+        return HttpHeaderQualityValue(value, atof(quality.c_str()));
+    }
+}
+
+static HttpHeaderQualityValues
+parse_quality_header(const std::string& str)
+{
+    HttpHeaderQualityValues res;
+    size_t pos = 0;
+    size_t endpos = 0;
+    while (true) {
+        endpos = str.find(", ", pos);
+        if (endpos == std::string::npos) {
+            if (str.length() - pos > 0) {
+                res.push_back(parse_quality_value(str.substr(pos)));
+            }
+            break;
+        }
+        if (endpos > pos) {
+            res.push_back(parse_quality_value(str.substr(pos, endpos - pos)));
+        }
+        pos = endpos + 2;
+    }
+    return res;
+}
+
+HttpHeaderQualityValues
+HttpRequest::find_header_quality_values(const std::string& key) const
+{
+    std::vector<std::string> headers = find_header_values(key);
+    HttpHeaderQualityValues res;
+
+    for (size_t i = 0; i < headers.size(); i++) {
+        const std::string& header = headers[i];
+        // parse the header string
+        HttpHeaderQualityValues quality_header = parse_quality_header(header);
+        res.insert(res.end(), quality_header.begin(), quality_header.end());
+    }
+    return res;
+}
+
 std::string
 HttpRequest::find_header_value(const std::string& key) const
 {

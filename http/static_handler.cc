@@ -245,6 +245,20 @@ StaticHttpHandler::validate_client_cache(const std::string& path,
     return false;
 }
 
+bool
+StaticHttpHandler::is_request_compression(HttpRequest& request)
+{
+    HttpHeaderQualityValues quality_vals =
+        request.find_header_quality_values("Accept-Encoding");
+    for (size_t i = 0; i < quality_vals.size(); i++) {
+        if (quality_vals[i].value == "gzip") {
+            return !quality_vals[i].has_quality
+                || quality_vals[i].quality != 0.0;
+        }
+    }
+    return false;
+}
+
 int
 StaticHttpHandler::try_open_file(const std::string& path, HttpRequest& request,
                                  HttpResponse& response)
