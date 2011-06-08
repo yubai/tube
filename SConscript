@@ -102,6 +102,8 @@ if not env.GetOption('clean'):
         Exit(1)
     
     conf = env.Configure(config_h='config.h', custom_tests={'SpecificConf': specific_conf, 'CheckRagel': CheckRagel})
+    if not conf.CheckLib('z'):
+        Exit(1)
     if not conf.CheckLibWithHeader('yaml-cpp', 'yaml-cpp/yaml.h', 'cxx'):
         Exit(1)
     if not conf.CheckLib('boost_thread-mt') and not conf.CheckLib('boost_thread'):

@@ -18,6 +18,9 @@ class StaticHttpHandler : public BaseHttpHandler
     std::string error_root_;
     std::string index_page_css_;
     bool        allow_index_;
+    bool        allow_compression_;
+    int         compression_memlevel_;
+    int         compression_level_;
 
     IOCache     io_cache_;
     std::string charset_;
@@ -41,6 +44,9 @@ public:
                                 HttpResponse& response);
 private:
     bool is_request_compression(HttpRequest& request);
+    bool write_data_compression(HttpResponse& response,
+                                HttpResponseStatus& status,
+                                byte* ptr, size_t size);
     bool validate_client_cache(const std::string& path, struct stat64 stat,
                                HttpRequest& request);
     int  try_open_file(const std::string& path, HttpRequest& request,

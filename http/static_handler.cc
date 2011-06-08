@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <locale.h>
 #include <langinfo.h>
+#include <zlib.h>
 
 #include "http/static_handler.h"
 #include "utils/logger.h"
@@ -51,6 +52,9 @@ StaticHttpHandler::StaticHttpHandler()
     add_option("index_page_css", "");
     add_option("max_cache_entry", "0");
     add_option("max_entry_size", "4096");
+    add_option("allow_compression", "false");
+    add_option("compression_level", "-1");
+    add_option("compression_memlevel", "5");
 }
 
 void
@@ -60,9 +64,12 @@ StaticHttpHandler::load_param()
     error_root_ = option("error_root");
     allow_index_ = utils::parse_bool(option("allow_index"));
     index_page_css_ = option("index_page_css");
+    allow_compression_ = utils::parse_bool(option("allow_compression"));
+    compression_level_ = utils::parse_int(option("compression_level"));
+    compression_memlevel_ = utils::parse_int(option("compression_memlevel"));
 
-    io_cache_.set_max_cache_entry(atoi(option("max_cache_entry").c_str()));
-    io_cache_.set_max_entry_size(atoi(option("max_entry_size").c_str()));
+    io_cache_.set_max_cache_entry(utils::parse_int(option("max_cache_entry")));
+    io_cache_.set_max_entry_size(utils::parse_int(option("max_entry_size")));
 }
 
 // currently we only support single range
@@ -248,6 +255,12 @@ StaticHttpHandler::validate_client_cache(const std::string& path,
 bool
 StaticHttpHandler::is_request_compression(HttpRequest& request)
 {
+    if (!allow_compression_) {
+        return false;
+    }
+    if (request.method() == HTTP_HEAD) {
+        return false;
+    }
     HttpHeaderQualityValues quality_vals =
         request.find_header_quality_values("Accept-Encoding");
     for (size_t i = 0; i < quality_vals.size(); i++) {
@@ -256,6 +269,51 @@ StaticHttpHandler::is_request_compression(HttpRequest& request)
                 || quality_vals[i].quality != 0.0;
         }
     }
+    return false;
+}
+
+static int kDeflateWindowBits = -MAX_WBITS;
+
+bool
+StaticHttpHandler::write_data_compression(HttpResponse& response,
+                                          HttpResponseStatus& status,
+                                          byte* ptr, size_t size)
+{
+    // initialize compression level
+    z_stream strm;
+    byte* out = new byte[size];
+    memset(&strm, 0, sizeof(z_stream));
+    memset(out, 0, size);
+    static byte gzhdr[10] = {0x1f, 0x8b, Z_DEFLATED, 0, 0, 0, 0, 0, 0, 0x03};
+
+    // without zlib header, we want pure deflate stream with gzip header
+    if (deflateInit2(&strm, compression_level_, Z_DEFLATED, kDeflateWindowBits,
+                     compression_memlevel_, Z_DEFAULT_STRATEGY) != Z_OK) {
+        goto error;
+    }
+    strm.avail_in = size;
+    strm.next_in = ptr;
+    strm.avail_out = size;
+    strm.next_out = out;
+
+    while (strm.avail_in > 0) {
+        if (deflate(&strm, Z_FINISH) == Z_STREAM_ERROR) {
+            goto error;
+        }
+    }
+
+    response.set_content_length(size - strm.avail_out + 10);
+    response.add_header("Content-Encoding", "gzip");
+    response.respond(status);
+    response.write_data(gzhdr, 10);
+    response.write_data(out, size - strm.avail_out);
+
+    deflateEnd(&strm);
+    delete [] out;
+    return true;
+error:
+    deflateEnd(&strm);
+    delete [] out;
     return false;
 }
 
@@ -330,6 +388,12 @@ StaticHttpHandler::respond_file_content(const std::string& path,
 
     response.disable_prepare_buffer();
     response.add_header("Last-Modified", build_last_modified(&stat.st_mtime));
+    // try to compress the data if requested.
+    if (cached_entry && is_request_compression(request)
+        && write_data_compression(response, ret_status, cached_entry + offset,
+                                  length)) {
+        goto done;
+    }
     response.set_content_length(length);
     response.respond(ret_status);
     if (request.method() != HTTP_HEAD) {

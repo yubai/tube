@@ -2,7 +2,8 @@
 
 namespace tube {
 
-const size_t IOCacheEntry::kCacheEntryMaxSize = 4096;
+const size_t
+IOCacheEntry::kCacheEntryMaxSize = 4096;
 
 IOCacheEntry::IOCacheEntry(const std::string& file_path, time_t mtime,
                            size_t file_size)

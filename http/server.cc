@@ -3,7 +3,6 @@
 #include <unistd.h>
 #include <signal.h>
 
-#include "http/static_handler.h"
 #include "http/http_wrapper.h"
 #include "http/configuration.h"
 #include "http/http_stages.h"

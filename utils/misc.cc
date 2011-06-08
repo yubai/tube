@@ -50,13 +50,19 @@ ignore_compare(const std::string& p, const std::string& q)
 }
 
 bool
-parse_bool(std::string str)
+parse_bool(const std::string& str)
 {
     if (ignore_compare(str, "on") || ignore_compare(str, "true")) {
         return true;
     } else {
         return false;
     }
+}
+
+int
+parse_int(const std::string& str)
+{
+    return atoi(str.c_str());
 }
 
 }

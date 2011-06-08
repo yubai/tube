@@ -23,6 +23,7 @@ handlers:
     index_page_css: /index_theme/plain.css
     max_cache_entry: 1024
     max_entry_size: 16384
+    allow_compression: true
   - name: theme_static
     module: static
     doc_root: data/style
