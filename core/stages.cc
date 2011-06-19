@@ -172,7 +172,6 @@ PollInStage::cleanup_connection(Poller& poller, Connection* conn)
         conn->set_active(false);
         ::shutdown(conn->fd(), SHUT_RDWR);
 
-        utils::Lock lk(mutex_);
         poller.remove_fd(conn->fd());
         poller.timer().remove(oldfuture, conn);
         recycle_stage_->sched_add(conn);
@@ -186,6 +185,7 @@ PollInStage::cleanup_idle_connection_callback(Poller& poller, void* ptr)
     if (!conn->try_lock())
         return false;
     cleanup_connection(poller, conn);
+    conn->unlock();
     return true;
 }
 
@@ -213,16 +213,17 @@ PollInStage::read_connection(Poller& poller, Connection* conn)
     do {
         nread = conn->in_stream().read_into_buffer();
     } while (nread > 0);
-    conn->unlock();
-    pipeline_.reschedule_all();
 
     if (nread < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
         // send it to parser stage
         parser_stage_->sched_add(conn);
     } else {
         // error happened, clean it up
+        utils::Lock lk(mutex_);
         cleanup_connection(poller, conn);
     }
+    conn->unlock();
+    pipeline_.reschedule_all();
 }
 
 void
@@ -230,7 +231,11 @@ PollInStage::handle_connection(Poller& poller, Connection* conn,
                                PollerEvent evt)
 {
     if ((evt & kPollerEventHup) || (evt & kPollerEventError)) {
-        cleanup_connection(poller, conn);
+        if (conn->try_lock()) {
+            utils::Lock lk(mutex_);
+            cleanup_connection(poller, conn);
+            conn->unlock();
+        }
     } else if (evt & kPollerEventRead) {
         read_connection(poller, conn);
     }
