@@ -33,6 +33,10 @@ public:
      */
     virtual u64     size() const = 0;
     /**
+     * @return if the writeables is EOF. By default, it checks if size() is zero
+     */
+    virtual bool    eof() const { return size() == 0; }
+    /**
      * How much memory does this object use. Some writeable objects (like
      * sendfile one) consume zero memory.
      * @return Memory consumption.

@@ -43,7 +43,7 @@ OutputStream::write_into_output()
     size_t mem_use = writeable->memory_usage();
     ssize_t res = writeable->write_to_fd(fd_);
     memory_usage_ -= mem_use - writeable->memory_usage();
-    if (writeable->size() == 0) {
+    if (writeable->eof()) {
         writeables_.pop_front();
         delete writeable;
     }
@@ -81,6 +81,13 @@ OutputStream::append_buffer(const Buffer& buf)
     Writeable* buffer = new Buffer(buf);
     writeables_.push_back(buffer);
     return buffer->size();
+}
+
+size_t
+OutputStream::append_writeable(Writeable* writeable)
+{
+    writeables_.push_back(writeable);
+    return writeable->size();
 }
 
 }

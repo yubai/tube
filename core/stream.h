@@ -75,6 +75,12 @@ public:
      * @return Buffer size.
      */
     size_t  append_buffer(const Buffer& buf);
+    /**
+     * Append a writeable object pointer. Note that this pointer is freed by
+     * the stream object, don't free it yourself.
+     * @return size of this writeable
+     */
+    size_t  append_writeable(Writeable* ptr);
 
     /**
      * @return True if stream is empty.
