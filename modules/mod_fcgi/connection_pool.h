@@ -3,6 +3,9 @@
 #ifndef _CONNECTIONPOOL_H_
 #define _CONNECTIONPOOL_H_
 
+#include <unistd.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <string>
 #include "utils/misc.h"
 
@@ -17,11 +20,11 @@ public:
 
     int  alloc_connection();
     void reclaim_connection(int sock);
-    
+
+    virtual bool connect(int sock) = 0;
 protected:
     virtual int  create_socket() = 0;
-    virtual bool connect(int sock) = 0;
-    
+
 protected:
     std::string address_;
     int max_n_sockets_;
@@ -50,7 +53,7 @@ class TcpConnectionPool : public ConnectionPool
 public:
     TcpConnectionPool(const std::string& address, int max_n_sockets);
     virtual ~TcpConnectionPool();
-    
+
 protected:
     virtual int  create_socket();
     virtual bool connect(int sock);

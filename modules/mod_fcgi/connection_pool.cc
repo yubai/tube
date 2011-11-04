@@ -1,6 +1,3 @@
-#include <unistd.h>
-#include <sys/socket.h>
-#include <sys/un.h>
 #include <errno.h>
 #include <netdb.h>
 #include <limits.h>
@@ -40,8 +37,7 @@ ConnectionPool::alloc_connection()
             goto done;
         }
         sock = create_socket();
-        if (sock > 0) {
-            connect(sock);
+        if (sock > 0 && connect(sock)) {
             sockets_.push_back(sock);
         }
         return sock;

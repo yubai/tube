@@ -173,7 +173,11 @@ HttpResponseStatus::kHttpResponseHttpVersionNotSupported =
 
 HttpResponseStatus::HttpResponseStatus(int code,
                                        const std::string& reason_string)
-    : status_code(code), reason(reason_string)
+    : status_code(code), reason(reason_string), is_text(false)
+{}
+
+HttpResponseStatus::HttpResponseStatus(const std::string& status_text)
+    : status_code(-1), reason(status_text), is_text(true), text(status_text)
 {}
 
 HttpRequest::HttpRequest(HttpConnection* conn, const HttpRequestData& request)
@@ -335,8 +339,12 @@ HttpResponse::respond(const HttpResponseStatus& status)
 
     // turn off the prepare buffer to use write_string
     use_prepare_buffer_ = false;
-    *this << kHttpVersion << " " << status.status_code << " " << status.reason
-          << kHttpNewLine;
+    if (status.is_text) {
+        *this << kHttpVersion << " " << status.text << kHttpNewLine;
+    } else {
+        *this << kHttpVersion << " " << status.status_code << " "
+              << status.reason << kHttpNewLine;
+    }
 
     for (size_t i = 0; i < headers_.size(); i++) {
         const HttpHeaderItem& item = headers_[i];
@@ -457,4 +465,3 @@ HttpRequest::url_decode(const std::string& url)
 }
 
 }
-

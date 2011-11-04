@@ -71,8 +71,11 @@ struct HttpResponseStatus
 {
     int         status_code;
     std::string reason;
+    bool        is_text;
+    std::string text;
 
     HttpResponseStatus(int code, const std::string& reason);
+    HttpResponseStatus(const std::string& text);
 
     static const HttpResponseStatus kHttpResponseContinue;
     static const HttpResponseStatus kHttpResponseSwitchingProtocols;
