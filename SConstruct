@@ -59,5 +59,9 @@ opts.Save('configure.conf', env)
 Export('opts', 'env', 'GetOS')
 
 SConscript('./SConscript', variant_dir=build_dir, duplicate=0)
+
+# python module
 SConscript('./modules/mod_python/SConscript', variant_dir=build_dir + '/modules/mod_python', duplicate=0)
+# fcgi module
+SConscript('./modules/mod_fcgi/SConscript', variant_dir=build_dir + '/modules/mod_fcgi', duplicate=0)
 

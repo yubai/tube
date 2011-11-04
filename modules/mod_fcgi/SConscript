@@ -1,0 +1,18 @@
+# -*- mode: python -*-
+from SCons import SConf
+
+source = ['connection_pool.cc',
+          'fcgi_handler.cc']
+
+Import('env', 'GetOS')
+
+env = env.Clone()
+env.Append(CPPPATH=['../../'])
+env.Append(LIBPATH=['../../'])
+
+libmodfcgi = env.SharedLibrary('../modfcgi', source=source, LIBS=['$LIBS', 'tube', 'tube-web'])
+
+# Install
+env.Alias('install', [
+        env.Install('$LIBDIR/tube/', libmodfcgi)
+        ])
