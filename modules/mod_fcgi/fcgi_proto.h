@@ -50,7 +50,40 @@ public:
     bool    eof() { return eof_; }
     bool    has_error() { return has_error_; }
 private:
+    void    recv_malform_packet(size_t size);
     void    recv_end_request();
+};
+
+class FcgiContentParser
+{
+public:
+    typedef std::pair<std::string, std::string> Pair;
+
+    FcgiContentParser();
+    virtual ~FcgiContentParser();
+
+    void init();
+    int  parse(const char* str, size_t size);
+    bool has_error() const;
+    bool is_done() const { return done_parse_; }
+
+    std::vector<Pair> headers() const { return headers_; }
+
+private:
+    void init_parser();
+protected:
+    void push_name(const char* str, size_t size);
+    void push_value(const char* str, size_t size);
+    void push_header();
+    void done_parse();
+private:
+    const char* name_mark_;
+    const char* value_mark_;
+    int         state_;
+    bool        done_parse_;
+
+    Pair              header_line_;
+    std::vector<Pair> headers_;
 };
 
 }

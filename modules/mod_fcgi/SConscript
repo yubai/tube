@@ -3,13 +3,16 @@ from SCons import SConf
 
 source = ['connection_pool.cc',
           'fcgi_handler.cc',
-          'fcgi_proto.cc']
+          'fcgi_proto.cc',
+          'fcgi_content_parser.cc']
 
 Import('env', 'GetOS')
 
 env = env.Clone()
 env.Append(CPPPATH=['../../'])
 env.Append(LIBPATH=['../../'])
+
+env.Command('fcgi_content_parser.cc', 'fcgi_content_parser.rl', 'ragel -s -G2 $SOURCE -o $TARGET')
 
 libmodfcgi = env.SharedLibrary('../modfcgi', source=source, LIBS=['$LIBS', 'tube', 'tube-web'])
 

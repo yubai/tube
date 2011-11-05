@@ -57,7 +57,11 @@ int main()
 {
     // setup the connection pool
     conn_pool = new fcgi::TcpConnectionPool("127.0.0.1:9000", 128);
-    int sock = conn_pool->alloc_connection();
+    bool is_connected = false;
+    int sock = conn_pool->alloc_connection(is_connected);
+    if (!is_connected) {
+        conn_pool->connect(sock);
+    }
     for (int i = 0; i < kNRetries; i++) {
         while (!do_test(sock)) {
             fprintf(stderr, "error, retry connection");

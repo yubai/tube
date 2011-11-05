@@ -226,6 +226,7 @@ FcgiResponseReader::read_response(byte* data, size_t size)
             n_bytes_padding_ = rec.padding_length;
         } else {
             LOG(ERROR, "malform packet! check fcgi implementation!");
+            recv_malform_packet(rec.total_length());
             has_error_ = true;
             eof_ = true;
             return -1;
@@ -251,6 +252,21 @@ FcgiResponseReader::read_response(byte* data, size_t size)
 }
 
 void
+FcgiResponseReader::recv_malform_packet(size_t size)
+{
+    byte data[1024];
+    while (size > 0) {
+        size_t nread = size;
+        if (nread > 1024) nread = 1024;
+        ssize_t res = ::read(sock_, data, nread);
+        if (res < 0) {
+            return;
+        }
+        size -= res;
+    }
+}
+
+void
 FcgiResponseReader::recv_end_request()
 {
     // receive end request type
@@ -267,6 +283,46 @@ FcgiResponseReader::recv_end_request()
     if (data[4] != 0) {
         has_error_ = true;
     }
+}
+
+FcgiContentParser::FcgiContentParser()
+{
+    init();
+}
+
+void
+FcgiContentParser::init()
+{
+    done_parse_ = false;
+    header_line_.first.clear();
+    header_line_.second.clear();
+    headers_.clear();
+
+    init_parser();
+}
+
+void
+FcgiContentParser::push_name(const char* str, size_t size)
+{
+    header_line_.first.insert(header_line_.first.end(), str, str + size);
+}
+
+void
+FcgiContentParser::push_value(const char* str, size_t size)
+{
+    header_line_.second.insert(header_line_.second.end(), str, str + size);
+}
+
+void
+FcgiContentParser::push_header()
+{
+    headers_.push_back(header_line_);
+}
+
+void
+FcgiContentParser::done_parse()
+{
+    done_parse_ = true;
 }
 
 }

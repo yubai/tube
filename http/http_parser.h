@@ -65,7 +65,7 @@ typedef int (*http_cb) (http_parser*);
 #define HTTP_IDENTITY   0x01
 #define HTTP_CHUNKED    0x02
 
-enum http_parser_type { HTTP_REQUEST, HTTP_RESPONSE };
+enum http_parser_type {HTTP_REQUEST, HTTP_RESPONSE};
 
 struct http_parser {
     /** PRIVATE **/

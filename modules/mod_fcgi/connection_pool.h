@@ -18,7 +18,7 @@ public:
     ConnectionPool(const std::string& address, int max_n_sockets);
     virtual ~ConnectionPool();
 
-    int  alloc_connection();
+    int  alloc_connection(bool& is_connected);
     void reclaim_connection(int sock);
 
     virtual bool connect(int sock) = 0;

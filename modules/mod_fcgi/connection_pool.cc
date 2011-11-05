@@ -25,7 +25,7 @@ ConnectionPool::~ConnectionPool()
 }
 
 int
-ConnectionPool::alloc_connection()
+ConnectionPool::alloc_connection(bool& is_connected)
 {
     int sock = -1;
     utils::Lock lk(mutex_);
@@ -37,12 +37,14 @@ ConnectionPool::alloc_connection()
             goto done;
         }
         sock = create_socket();
-        if (sock > 0 && connect(sock)) {
+        if (sock > 0) {
             sockets_.push_back(sock);
         }
+        is_connected = false;
         return sock;
     }
 done:
+    is_connected = true;
     sock = free_connections_.back();
     free_connections_.pop_back();
     return sock;
