@@ -47,9 +47,11 @@ public:
 
     virtual void handle_event(int timeout)  = 0;
     virtual bool poll_add_fd(int fd, Connection* conn, PollerEvent evt) = 0;
+    virtual bool poll_change_fd(int fd, Connection* conn, PollerEvent evt) = 0;
     virtual bool poll_remove_fd(int fd) = 0;
 
     bool add_fd(int fd, Connection* conn, PollerEvent evt);
+    bool change_fd(int fd, Connection* conn, PollerEvent evt);
     bool remove_fd(int fd);
 
     Timer& timer() { return timer_; }
@@ -99,4 +101,3 @@ private:
 }
 
 #endif /* _POLLER_H_ */
-

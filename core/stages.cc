@@ -104,9 +104,6 @@ PollInStage::PollInStage()
 
 PollInStage::~PollInStage()
 {
-    for (size_t i = 0; i < pollers_.size(); i++) {
-        PollerFactory::instance().destroy_poller(pollers_[i]);
-    }
 }
 
 bool
@@ -272,6 +269,7 @@ PollInStage::main_loop()
     poller->set_event_handler(evthdl);
     add_poll(poller);
     poller->handle_event(timeout_);
+    PollerFactory::instance().destroy_poller(poller);
     delete poller;
 }
 

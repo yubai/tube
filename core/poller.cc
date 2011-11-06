@@ -5,7 +5,7 @@
 
 namespace tube {
 
-Poller::Poller() 
+Poller::Poller()
 {
 }
 
@@ -43,6 +43,20 @@ Poller::add_fd(int fd, Connection* conn, PollerEvent evt)
 {
     if (add_fd_set(fd, conn)) {
         if (!poll_add_fd(fd, conn, evt)) {
+            remove_fd_set(fd);
+            goto failed;
+        }
+        return true;
+    }
+failed:
+    return false;
+}
+
+bool
+Poller::change_fd(int fd, Connection* conn, PollerEvent evt)
+{
+    if (has_fd(fd)) {
+        if (!poll_change_fd(fd, conn, evt)) {
             remove_fd_set(fd);
             goto failed;
         }

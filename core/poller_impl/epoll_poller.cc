@@ -25,7 +25,11 @@ public:
 
     virtual void handle_event(int timeout) ;
     virtual bool poll_add_fd(int fd, Connection* conn, PollerEvent evt);
+    virtual bool poll_change_fd(int fd, Connection* conn, PollerEvent evt);
     virtual bool poll_remove_fd(int fd);
+private:
+    bool poll_add_or_change(int fd, Connection* con, PollerEvent evt,
+                            bool change);
 };
 
 EpollPoller::EpollPoller()
@@ -65,12 +69,15 @@ build_poller_event(int events)
 }
 
 bool
-EpollPoller::poll_add_fd(int fd, Connection* conn, PollerEvent evt)
+EpollPoller::poll_add_or_change(int fd, Connection* conn, PollerEvent evt,
+                                bool change)
 {
     struct epoll_event epoll_evt;
     epoll_evt.events = build_epoll_event(evt);
     epoll_evt.data.ptr = conn;
-    if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, fd, &epoll_evt) < 0) {
+    int flag = EPOLL_CTL_ADD;
+    if (change) flag = EPOLL_CTL_MOD;
+    if (epoll_ctl(epoll_fd_, flag, fd, &epoll_evt) < 0) {
         if (errno != EEXIST) {
             // fd is not watched
             LOG(WARNING, "add to epoll failed, remove fd %d", fd);
@@ -78,6 +85,18 @@ EpollPoller::poll_add_fd(int fd, Connection* conn, PollerEvent evt)
         }
     }
     return true;
+}
+
+bool
+EpollPoller::poll_add_fd(int fd, Connection* conn, PollerEvent evt)
+{
+    return poll_add_or_change(fd, conn, evt, false);
+}
+
+bool
+EpollPoller::poll_change_fd(int fd, Connection* conn, PollerEvent evt)
+{
+    return poll_add_or_change(fd, conn, evt, true);
 }
 
 bool
