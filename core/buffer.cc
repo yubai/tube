@@ -164,7 +164,29 @@ Buffer::copy_front(byte* ptr, size_t sz)
             ncopy = MIN(sz, kPageSize);
             memcpy(ptr, *it, ncopy);
         }
-        ptr += sz;
+        ptr += ncopy;
+        sz -= ncopy;
+        ++it;
+    } while (sz > 0);
+    return true;
+}
+
+bool
+Buffer::copy_front(Buffer& buffer, size_t sz)
+{
+    if (size_ < sz)
+        return false;
+
+    PageIterator it = cow_info_->pages_.begin();
+    int ncopy = 0;
+    do {
+        if (it == cow_info_->pages_.begin()) {
+            ncopy = MIN(sz, kPageSize - left_offset_);
+            buffer.append(*it + left_offset_, ncopy);
+        } else {
+            ncopy = MIN(sz, kPageSize);
+            buffer.append(*it, ncopy);
+        }
         sz -= ncopy;
         ++it;
     } while (sz > 0);

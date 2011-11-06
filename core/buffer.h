@@ -92,6 +92,8 @@ public:
      * @return True if the operation succeeded.
      */
     bool copy_front(byte* ptr, size_t size);
+    bool copy_front(Buffer& buffer, size_t size);
+
     /**
      * Erase the first @param pop_size bytes.
      * @param pop_size The number of bytes to be erased.
