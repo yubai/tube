@@ -32,26 +32,54 @@ private:
     void done_environment();
 };
 
-class FcgiResponseReader
+// fcgi protocol header
+struct Record
 {
-    int sock_;
-    bool eof_;
-    bool has_error_;
-    size_t n_bytes_left_;
-    size_t n_bytes_padding_;
+    unsigned char  version;
+    unsigned char  type;
+    unsigned short request_id;
+    unsigned short content_length;
+    unsigned char  padding_length;
+    unsigned char  reserved;
 
-    byte* header_;
-    size_t header_offset_;
+    static const unsigned char kFcgiBeginRequest = 1;
+    static const unsigned char kFcgiAbortRequest = 2;
+    static const unsigned char kFcgiEndRequest = 3;
+    static const unsigned char kFcgiParams = 4;
+    static const unsigned char kFcgiStdin = 5;
+    static const unsigned char kFcgiStdout = 6;
+    static const unsigned char kFcgiStderr = 7;
+    static const unsigned char kFcgiData = 8;
+    static const unsigned char kFcgiGetValues = 9;
+    static const unsigned char kFcgiGetValuesResult = 10;
+    static const unsigned char kFcgiUnknownType = 11;
+
+    Record(unsigned char record_type);
+    Record(const byte* ptr);
+    Record(const Record& rhs);
+
+    void append_to_buffer(Buffer& buffer);
+    void append_to_buffer_content_data(Buffer& buffer, const byte* ptr);
+    void set_content_length(size_t size);
+    size_t total_length() const;
+};
+
+static const size_t kRecordSize = sizeof(Record);
+
+class FcgiResponseParser
+{
+    Buffer& buffer_;
 public:
-    FcgiResponseReader(int sock);
-    virtual ~FcgiResponseReader();
+    FcgiResponseParser(Buffer& buffer);
+    virtual ~FcgiResponseParser();
 
-    ssize_t read_response(byte* data, size_t size);
-    bool    eof() { return eof_; }
-    bool    has_error() { return has_error_; }
-private:
-    void    recv_malform_packet(size_t size);
-    void    recv_end_request();
+    /**
+     * Extract a record header from buffer. if incomplete buffer, return a NULL
+     * Record header need to freed after use.
+     */
+    Record* extract_record();
+    void    bypass_content(size_t tot_size);
+    void    copy_content(Buffer& buf, size_t size);
 };
 
 class FcgiContentParser

@@ -27,7 +27,8 @@ static bool
 do_test(int sock)
 {
     fcgi::FcgiEnvironment env(sock);
-    fcgi::FcgiResponseReader reader(sock);
+    Buffer read_buffer;
+    fcgi::FcgiResponseParser parser(read_buffer);
     env.begin_request();
     for (size_t i = 0; i < 13; i++) {
         fprintf(stderr, "add header %s: %s\n", kv_pairs[i][0].c_str(),
@@ -39,15 +40,42 @@ do_test(int sock)
     env.done_request();
 
     // receiving the response
-    while (!reader.eof()) {
-        byte data[1024];
-        int res = reader.read_response(data, 1024);
-        if (res < 0) {
-            perror("read");
-            return false;
+    while (true) {
+        fcgi::Record* rec = parser.extract_record();
+        if (rec == NULL) {
+            if (read_buffer.read_from_fd(sock) < 0) {
+                return false;
+            }
+            continue;
         }
-        write(1, data, res);
+        fprintf(stderr, "type %d\n", rec->type);
+        switch (rec->type) {
+        case fcgi::Record::kFcgiEndRequest:
+            // EOF
+            parser.bypass_content(rec->total_length());
+            goto done;
+        case fcgi::Record::kFcgiStdout:
+        case fcgi::Record::kFcgiStderr:
+            size_t cnt = rec->content_length;
+            for (Buffer::PageIterator it = read_buffer.page_begin();
+                 it != read_buffer.page_end(); ++it) {
+                size_t len = 0;
+                const char* ptr =
+                    (const char*) read_buffer.get_page_segment(*it, &len);
+                if (cnt < len) {
+                    write(1, ptr, cnt);
+                    break;
+                } else {
+                    write(1, ptr, len);
+                    cnt -= len;
+                }
+            }
+            parser.bypass_content(rec->total_length());
+        }
+        delete rec;
     }
+
+done:
     return true;
 }
 

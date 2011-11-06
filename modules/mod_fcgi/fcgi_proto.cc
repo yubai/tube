@@ -5,82 +5,73 @@
 namespace tube {
 namespace fcgi {
 
-// fcgi protocol header
-struct Record
+
+void
+Record::append_to_buffer(Buffer& buffer)
 {
-    unsigned char  version;
-    unsigned char  type;
-    unsigned short request_id;
-    unsigned short content_length;
-    unsigned char  padding_length;
-    unsigned char  reserved;
+    size_t len = sizeof(Record);
+    byte data[len];
+    memcpy(data, this, len);
+    data[2] = (byte) (request_id >> 8) & 0xFF;
+    data[3] = (byte) request_id & 0xFF;
+    data[4] = (byte) (content_length >> 8) & 0xFF;
+    data[5] = (byte) content_length & 0xFF;
+    buffer.append(data, len);
+}
 
-    void append_to_buffer(Buffer& buffer) {
-        size_t len = sizeof(Record);
-        byte data[len];
-        memcpy(data, this, len);
-        data[2] = (byte) (request_id >> 8) & 0xFF;
-        data[3] = (byte) request_id & 0xFF;
-        data[4] = (byte) (content_length >> 8) & 0xFF;
-        data[5] = (byte) content_length & 0xFF;
-        buffer.append(data, len);
+void
+Record::append_to_buffer_content_data(Buffer& buffer, const byte* ptr)
+{
+    if (content_length == 0) {
+        // has nothing to do, don't access that pointer
+        return;
     }
-
-    void append_to_buffer_content_data(Buffer& buffer, const byte* ptr) {
-        if (content_length == 0) {
-            // has nothing to do, don't access that pointer
-            return;
-        }
-        // ptr has at least content_length size! otherwise will overflow
-        buffer.append(ptr, content_length);
-        // align the data with zero
-        if (padding_length != 0) {
-            byte data[padding_length];
-            memset(data, 0, padding_length);
-            buffer.append(data, padding_length);
-        }
+    // ptr has at least content_length size! otherwise will overflow
+    buffer.append(ptr, content_length);
+    // align the data with zero
+    if (padding_length != 0) {
+        byte data[padding_length];
+        memset(data, 0, padding_length);
+        buffer.append(data, padding_length);
     }
+}
 
-    Record(unsigned char record_type)
-        : version(1), type(record_type), request_id(1), content_length(0),
-          padding_length(0), reserved(0)
-    {}
+Record::Record(unsigned char record_type)
+    : version(1), type(record_type), request_id(1), content_length(0),
+      padding_length(0), reserved(0)
+{}
 
-    Record(const byte* ptr) {
-        size_t len = sizeof(Record);
-        memcpy(this, ptr, len);
-        byte* data = (byte*) this;
-        request_id = (data[2] << 8) | data[3];
-        content_length = (data[4] << 8) | data[5];
+Record::Record(const byte* ptr)
+{
+    size_t len = sizeof(Record);
+    memcpy(this, ptr, len);
+    byte* data = (byte*) this;
+    request_id = (data[2] << 8) | data[3];
+    content_length = (data[4] << 8) | data[5];
+}
+
+Record::Record(const Record& rhs)
+{
+    memcpy(this, &rhs, kRecordSize);
+}
+
+void
+Record::set_content_length(size_t size)
+{
+    content_length = (unsigned short) size;
+    if (content_length % 4 == 0) {
+        padding_length = 0;
+    } else {
+        padding_length = 4 - content_length % 4;
     }
+}
 
-    void set_content_length(size_t size) {
-        content_length = (unsigned short) size;
-        if (content_length % 4 == 0) {
-            padding_length = 0;
-        } else {
-            padding_length = 4 - content_length % 4;
-        }
-    }
+size_t
+Record::total_length() const
+{
+    return content_length + padding_length;
+}
 
-    size_t total_length() const {
-        return content_length + padding_length;
-    }
-};
-
-static const size_t kRecordSize = sizeof(Record);
-
-static const unsigned char kFcgiBeginRequest = 1;
-static const unsigned char kFcgiAbortRequest = 2;
-static const unsigned char kFcgiEndRequest = 3;
-static const unsigned char kFcgiParams = 4;
-static const unsigned char kFcgiStdin = 5;
-static const unsigned char kFcgiStdout = 6;
-static const unsigned char kFcgiStderr = 7;
-static const unsigned char kFcgiData = 8;
-static const unsigned char kFcgiGetValues = 9;
-static const unsigned char kFcgiGetValuesResult = 10;
-static const unsigned char kFcgiUnknownType = 11;
 
 FcgiEnvironment::FcgiEnvironment(int sock)
     : sock_(sock), state_(0)
@@ -95,7 +86,7 @@ FcgiEnvironment::begin_request()
     if (state_ != 0) {
         return false;
     }
-    Record rec(kFcgiBeginRequest); // begin request packet
+    Record rec(Record::kFcgiBeginRequest); // begin request packet
     byte data[8] = {0, 1, 1, 0, 0, 0, 0, 0}; // responder, keep connection
     rec.set_content_length(8);
     rec.append_to_buffer(buffer_);
@@ -149,7 +140,7 @@ FcgiEnvironment::commit_environment()
     if (kv_buf_.empty()) {
         return false;
     }
-    Record rec(kFcgiParams);
+    Record rec(Record::kFcgiParams);
     rec.set_content_length(kv_buf_.size());
     rec.append_to_buffer(buffer_);
     rec.append_to_buffer_content_data(buffer_, &kv_buf_[0]);
@@ -160,7 +151,7 @@ FcgiEnvironment::commit_environment()
 void
 FcgiEnvironment::done_environment()
 {
-    Record rec(kFcgiParams);
+    Record rec(Record::kFcgiParams);
     rec.set_content_length(0);
     rec.append_to_buffer(buffer_);
 }
@@ -174,7 +165,7 @@ FcgiEnvironment::prepare_request(size_t size)
     // send a black param packets indicate application start.
     done_environment();
     // preparing the stdin from data
-    Record rec(kFcgiStdin);
+    Record rec(Record::kFcgiStdin);
     rec.set_content_length(size);
     rec.append_to_buffer(buffer_);
     // all done. fire the request
@@ -190,105 +181,48 @@ FcgiEnvironment::done_request()
     state_ = 0;
 }
 
-FcgiResponseReader::FcgiResponseReader(int sock)
-    : sock_(sock), eof_(false), has_error_(false), n_bytes_left_(0),
-      n_bytes_padding_(0), header_offset_(0)
-{
-    header_ = new byte[kRecordSize];
-}
+FcgiResponseParser::FcgiResponseParser(Buffer& buffer)
+    : buffer_(buffer)
+{}
 
-FcgiResponseReader::~FcgiResponseReader()
-{
-    delete [] header_;
-}
+FcgiResponseParser::~FcgiResponseParser()
+{}
 
-ssize_t
-FcgiResponseReader::read_response(byte* data, size_t size)
+Record*
+FcgiResponseParser::extract_record()
 {
-    bool reparse = false;
-    while (header_offset_ < kRecordSize) {
-        reparse = true;
-        ssize_t res = ::read(sock_, header_ + header_offset_,
-                             kRecordSize - header_offset_);
-        if (res <= 0) {
-            return res;
-        }
-        header_offset_ += res;
+    byte data[kRecordSize];
+    if (!buffer_.copy_front(data, kRecordSize)) {
+        return NULL;
     }
-    if (reparse) {
-        Record rec(header_);
-        if (rec.type == kFcgiEndRequest) {
-            eof_ = true;
-            recv_end_request();
-            return has_error_ ? -1 : 0;
-        } else if (rec.type == kFcgiStdout || rec.type == kFcgiStderr) {
-            n_bytes_left_ = rec.total_length(); // include the padding
-            n_bytes_padding_ = rec.padding_length;
-        } else {
-            LOG(ERROR, "malform packet! check fcgi implementation!");
-            recv_malform_packet(rec.total_length());
-            has_error_ = true;
-            eof_ = true;
-            return -1;
-        }
+    Record rec(data);
+    if (buffer_.size() < rec.total_length()) {
+        return NULL; // data hasn't been received completely
     }
-    if (n_bytes_left_ == 0) {
-        header_offset_ = 0;
-        return 0;
-    }
-
-    if (n_bytes_left_ < size) {
-        size = n_bytes_left_;
-    }
-    ssize_t res = ::read(sock_, data, size);
-    if (res < 0) {
-        return res;
-    }
-    n_bytes_left_ -= res;
-    if (n_bytes_padding_ > n_bytes_left_) {
-        res -= n_bytes_padding_ - n_bytes_left_; // remove the padding bytes
-    }
-    return res;
+    buffer_.pop(kRecordSize);
+    return new Record(rec);
 }
 
 void
-FcgiResponseReader::recv_malform_packet(size_t size)
+FcgiResponseParser::bypass_content(size_t size)
 {
-    byte data[1024];
-    while (size > 0) {
-        size_t nread = size;
-        if (nread > 1024) nread = 1024;
-        ssize_t res = ::read(sock_, data, nread);
-        if (res < 0) {
-            return;
-        }
-        size -= res;
-    }
+    buffer_.pop(size);
 }
 
 void
-FcgiResponseReader::recv_end_request()
+FcgiResponseParser::copy_content(Buffer& buf, size_t size)
 {
-    // receive end request type
-    byte data[8];
-    size_t off = 0;
-    while (off < 8) {
-        ssize_t res = ::read(sock_, data + off, 8 - off);
-        if (res < 0) {
-            has_error_ = true;
-            return;
-        }
-        off += res;
-    }
-    if (data[4] != 0) {
-        has_error_ = true;
-    }
+    buffer_.copy_front(buf, size);
+    buffer_.pop(size);
 }
 
 FcgiContentParser::FcgiContentParser()
 {
     init();
 }
+
+FcgiContentParser::~FcgiContentParser()
+{}
 
 void
 FcgiContentParser::init()
