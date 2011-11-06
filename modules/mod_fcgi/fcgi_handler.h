@@ -1,7 +1,7 @@
 // -*- mode: c++ -*-
 
-#ifndef _PYTHON_HANDLER_H_
-#define _PYTHON_HANDLER_H_
+#ifndef _FCGI_HANDLER_H_
+#define _FCGI_HANDLER_H_
 
 #include <string>
 
@@ -39,4 +39,4 @@ public:
 }
 }
 
-#endif /* _PYTHON_HANDLER_H_ */
+#endif /* _FCGI_HANDLER_H_ */

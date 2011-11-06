@@ -32,6 +32,8 @@ protected:
 protected:
     virtual int process_task(Connection* conn) { return 0; };
 public:
+    static const int kStageReleaseLock = 0;
+    static const int kStageKeepLock = -1;
     /**
      * Constructor for Stage object
      * @param name Name of the Stage object.

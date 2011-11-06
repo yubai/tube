@@ -57,6 +57,8 @@ class HttpConnection : public Connection
     std::string     last_header_value_;
     u64             bytes_should_skip_;
 
+    void*           continuation_data_;
+
 public:
 
     static const size_t kMaxBodySize;
@@ -83,6 +85,11 @@ public:
     bool is_ready() const;
 
     std::list<HttpRequestData>& get_request_data_list() { return requests_; }
+
+    void  set_continuation(void* ptr) { continuation_data_ = ptr; }
+    void* get_continuation() const { return continuation_data_; }
+    void  reset_continuation() { continuation_data_ = NULL; }
+    bool  has_continuation() const { return continuation_data_ != NULL; }
 };
 
 }

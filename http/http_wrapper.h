@@ -65,6 +65,9 @@ public:
 
     // used for C wrapper only
     const HttpRequestData& request_data_ref() const { return request_; }
+
+    void  suspend_continuation(void* continuation);
+    void* restore_continuation();
 };
 
 struct HttpResponseStatus

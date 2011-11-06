@@ -64,8 +64,8 @@ int
 Response::response_code() const
 {
     if (active() && !conn_->out_stream().is_done())
-        return -1;
-    return 0;
+        return Stage::kStageKeepLock;
+    return Stage::kStageReleaseLock;
 }
 
 ssize_t

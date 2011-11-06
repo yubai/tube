@@ -126,7 +126,7 @@ HttpHandlerStage::log_respond(Connection* conn, HttpRequest& request,
 }
 
 void
-HttpHandlerStage::trigger_handler(Connection* conn, HttpRequest& request,
+HttpHandlerStage::trigger_handler(HttpConnection* conn, HttpRequest& request,
                                   HttpResponse& response)
 {
     std::list<BaseHttpHandler*> chain;
@@ -146,6 +146,10 @@ HttpHandlerStage::trigger_handler(Connection* conn, HttpRequest& request,
          it != chain.end(); ++it) {
         BaseHttpHandler* handler = *it;
         handler->handle_request(request, response);
+        if (conn->has_continuation()) {
+            // suspended. return immediately!
+            return;
+        }
         if (response.is_responded())
             goto done;
     }
@@ -171,7 +175,10 @@ HttpHandlerStage::process_task(Connection* conn)
             break;
         HttpRequest request(http_connection, client_requests.front());
         client_requests.pop_front();
-        trigger_handler(conn, request, response);
+        trigger_handler(http_connection, request, response);
+        if (http_connection->has_continuation()) {
+            goto suspended;
+        }
         if (!request.keep_alive()) {
             LOG(DEBUG, "active close after transfer finish");
             conn->set_close_after_finish(true);
@@ -187,6 +194,15 @@ done:
         sched_->controller()->decrease_load(orig_size - client_requests.size());
     }
     return response.response_code();
+suspended:
+    return kStageKeepLock;
+}
+
+void
+HttpHandlerStage::resched_continuation(HttpConnection* conn)
+{
+    sched_add(conn);
+    conn->unlock(); // unlock for scheduling
 }
 
 }
