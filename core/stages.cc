@@ -366,6 +366,13 @@ PollOutStage::handle_connection(Poller& poller, Connection* conn,
 
         if (out.is_done() || has_error) {
             conn->clear_cork();
+
+            if (conn->has_continuation()) {
+                poller.remove_fd(conn->fd());
+                conn->resched_continuation();
+                return;
+            }
+
             if (conn->is_close_after_finish() || has_error) {
                 conn->active_close();
             } else {

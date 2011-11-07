@@ -86,10 +86,7 @@ public:
 
     std::list<HttpRequestData>& get_request_data_list() { return requests_; }
 
-    void  set_continuation(void* ptr) { continuation_data_ = ptr; }
-    void* get_continuation() const { return continuation_data_; }
-    void  reset_continuation() { continuation_data_ = NULL; }
-    bool  has_continuation() const { return continuation_data_ != NULL; }
+    virtual void resched_continuation();
 };
 
 }

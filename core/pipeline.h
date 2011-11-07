@@ -213,6 +213,15 @@ public:
      * Actively close the connection.
      */
     void active_close();
+
+    /// continuation support
+    void  set_continuation(void* ptr) { continuation_data_ = ptr; }
+    void* get_continuation() const { return continuation_data_; }
+    void  reset_continuation() { continuation_data_ = NULL; }
+    bool  has_continuation() const { return continuation_data_ != NULL; }
+
+    virtual void resched_continuation() {};
+
 protected:
     // poller specific data, might not be used
     PollerSpecData poller_spec_;
@@ -232,6 +241,8 @@ protected:
 
     int         flags_;
     Timer::Unit last_active_;
+
+    void*       continuation_data_;
 };
 
 class Controller;

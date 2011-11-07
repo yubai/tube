@@ -464,20 +464,4 @@ HttpRequest::url_decode(const std::string& url)
     return http_url_decode(url);
 }
 
-void
-HttpRequest::suspend_continuation(void* continuation)
-{
-    HttpConnection* conn = (HttpConnection*) conn_;
-    conn->set_continuation(continuation);
-}
-
-void*
-HttpRequest::restore_continuation()
-{
-    HttpConnection* conn = (HttpConnection*) conn_;
-    void* res = conn->get_continuation();
-    conn->reset_continuation();
-    return res;
-}
-
 }

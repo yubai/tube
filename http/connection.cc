@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include "http/connection.h"
+#include "http/http_stages.h"
 #include "http/configuration.h"
 #include "utils/logger.h"
 
@@ -257,6 +258,14 @@ HttpConnection::finish_parse()
     tmp_request_.clear();
     last_header_key_.clear();
     last_header_value_.clear();
+}
+
+void
+HttpConnection::resched_continuation()
+{
+    HttpHandlerStage* handler_stage =
+        (HttpHandlerStage*) Pipeline::instance().find_stage("http_handler");
+    handler_stage->resched_continuation(this);
 }
 
 }

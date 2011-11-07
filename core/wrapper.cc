@@ -37,9 +37,7 @@ Request::read_data(byte* ptr, size_t sz)
         ptr += nbuffer_read;
     }
     if (sz > 0) {
-        utils::set_socket_blocking(conn_->fd(), true);
         nread = ::read(conn_->fd(), (void*) ptr, sz);
-        utils::set_socket_blocking(conn_->fd(), false);
     }
     return nbuffer_read + nread;
 }
@@ -54,7 +52,8 @@ Response::Response(Connection* conn)
 
 Response::~Response()
 {
-    if (response_code() < 0) {
+    if (response_code() == Stage::kStageKeepLock
+        && conn_->get_continuation() == NULL) {
         conn_->set_cork();
         out_stage_->sched_add(conn_); // silently flush
     }
@@ -63,6 +62,8 @@ Response::~Response()
 int
 Response::response_code() const
 {
+    if (conn_->get_continuation() != NULL)
+        return Stage::kStageKeepLock;
     if (active() && !conn_->out_stream().is_done())
         return Stage::kStageKeepLock;
     return Stage::kStageReleaseLock;
@@ -105,7 +106,7 @@ Response::flush_data()
 {
     OutputStream& out = conn_->out_stream();
     ssize_t nwrite = 0;
-    utils::set_socket_blocking(conn_->fd(), true);
+    set_blocking();
     while (true) {
         ssize_t rs = out.write_into_output();
         if (rs < 0) {
@@ -116,7 +117,7 @@ Response::flush_data()
         }
         nwrite += rs;
     }
-    utils::set_socket_blocking(conn_->fd(), false);
+    set_nonblocking();
     return nwrite;
 }
 
@@ -125,6 +126,20 @@ Response::close()
 {
     inactive_ = true;
     conn_->active_close();
+}
+
+void
+Response::suspend_continuation(void* continuation)
+{
+    conn_->set_continuation(continuation);
+}
+
+void*
+Response::restore_continuation()
+{
+    void* res = conn_->get_continuation();
+    conn_->reset_continuation();
+    return res;
 }
 
 }

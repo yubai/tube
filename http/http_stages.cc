@@ -174,11 +174,11 @@ HttpHandlerStage::process_task(Connection* conn)
         if (client_requests.empty())
             break;
         HttpRequest request(http_connection, client_requests.front());
-        client_requests.pop_front();
         trigger_handler(http_connection, request, response);
-        if (http_connection->has_continuation()) {
-            goto suspended;
+        if (conn->has_continuation()) {
+            goto done;
         }
+        client_requests.pop_front();
         if (!request.keep_alive()) {
             LOG(DEBUG, "active close after transfer finish");
             conn->set_close_after_finish(true);
@@ -194,8 +194,6 @@ done:
         sched_->controller()->decrease_load(orig_size - client_requests.size());
     }
     return response.response_code();
-suspended:
-    return kStageKeepLock;
 }
 
 void

@@ -29,6 +29,9 @@ protected:
      * Enable IO poll for this connection.
      */
     void enable_poll() { pipeline_.enable_poll(conn_); }
+
+    void set_blocking() { utils::set_socket_blocking(conn_->fd(), true); }
+    void set_nonblocking() { utils::set_socket_blocking(conn_->fd(), false); }
 };
 
 class Request : public Wrapper
@@ -84,6 +87,9 @@ public:
      * Close this connection.
      */
     void    close();
+
+    void  suspend_continuation(void* continuation);
+    void* restore_continuation();
 };
 
 }
