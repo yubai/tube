@@ -52,6 +52,7 @@ void set_socket_blocking(int fd, bool block);
 void set_fdtable_size(size_t sz);
 
 bool ignore_compare(const std::string& p, const std::string& q);
+std::string string_to_upper_case(const std::string& str);
 bool parse_bool(const std::string& str);
 int  parse_int(const std::string& str);
 }

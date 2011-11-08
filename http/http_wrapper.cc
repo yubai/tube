@@ -283,7 +283,7 @@ HttpRequest::find_header_value(const std::string& key) const
 {
     const HttpHeaderEnumerate& headers = request_.headers;
     for (size_t i = 0; i < headers.size(); i++) {
-        if (headers[i].key == key)
+        if (utils::ignore_compare(headers[i].key, key))
             return headers[i].value;
     }
     return "";

@@ -4,7 +4,9 @@ from SCons import SConf
 source = ['connection_pool.cc',
           'fcgi_handler.cc',
           'fcgi_proto.cc',
-          'fcgi_content_parser.cc']
+          'fcgi_content_parser.cc',
+          'fcgi_completion_stage.cc',
+          'fcgi.mod.c']
 
 Import('env', 'GetOS')
 

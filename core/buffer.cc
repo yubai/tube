@@ -149,6 +149,20 @@ Buffer::append(const byte* ptr, size_t sz)
 }
 
 bool
+Buffer::append(Buffer& buffer)
+{
+    bool fail = false;
+    for (PageIterator it = buffer.page_begin(); it != buffer.page_end(); ++it) {
+        size_t len = 0;
+        const byte* ptr = buffer.get_page_segment(*it, &len);
+        if (!append(ptr, len)) {
+            fail = true;
+        }
+    }
+    return !fail;
+}
+
+bool
 Buffer::copy_front(byte* ptr, size_t sz)
 {
     if (size_ < sz)

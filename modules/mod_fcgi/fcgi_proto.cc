@@ -169,9 +169,6 @@ FcgiEnvironment::prepare_request(size_t size)
     rec.set_content_length(size);
     rec.append_to_buffer(buffer_);
     // all done. fire the request
-    while (buffer_.size() > 0) {
-        buffer_.write_to_fd(sock_);
-    }
     return rec.total_length();
 }
 
@@ -228,6 +225,8 @@ void
 FcgiContentParser::init()
 {
     done_parse_ = false;
+    is_streaming_ = false;
+    status_text_.clear();
     header_line_.first.clear();
     header_line_.second.clear();
     headers_.clear();
@@ -250,7 +249,20 @@ FcgiContentParser::push_value(const char* str, size_t size)
 void
 FcgiContentParser::push_header()
 {
+    if (header_line_.first == "Status") {
+        status_text_ = header_line_.second;
+        goto clear;
+    }
     headers_.push_back(header_line_);
+    if (header_line_.first == "Transfer-encoding"
+        && header_line_.second == "chunked") {
+        is_streaming_ = true;
+    } else if (header_line_.first == "Content-length") {
+        is_streaming_ = true;
+    }
+clear:
+    header_line_.first.clear();
+    header_line_.second.clear();
 }
 
 void

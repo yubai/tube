@@ -20,7 +20,9 @@ protected:
 public:
     Wrapper(Connection* conn);
     virtual ~Wrapper() {}
-protected:
+
+    Connection* connection() const { return conn_; }
+
     /**
      * Disable IO poll for this connection.
      */

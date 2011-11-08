@@ -147,6 +147,7 @@ public:
 
     bool has_content_length() const { return has_content_length_; }
     int64 content_length() const { return content_length_; }
+    void force_responded() { is_responded_ = true; }
     bool is_responded() const { return is_responded_; }
 
     // write it into the prepared buffer

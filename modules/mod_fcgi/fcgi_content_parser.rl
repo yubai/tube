@@ -33,16 +33,15 @@
 
     token = (ascii -- (CTL | tspecials));
     name = (token -- ":")+;
-    value = token+;
+    value = ((any - " ") any*)?;
+    hsep = ":" " "*;
 
     Name = name >mark_name %done_name;
     Value = value >mark_value %done_value;
 
-    header = Name ": " Value newline;
-    Header = header >end_header;
-    headers = (Header*) newline;
-    Headers = headers %done_headers;
-    main := Headers;
+    header = (Name hsep Value) :> newline;
+    Header = header %end_header;
+    main := (Header*) :> newline @done_headers;
 }%%
 
 namespace tube {
@@ -78,6 +77,7 @@ FcgiContentParser::parse(const char* buf, size_t len)
 bool
 FcgiContentParser::has_error() const
 {
+    if (done_parse_) return false;
     return state_ == fcgi_content_error; // return if in error state
 }
 

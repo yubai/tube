@@ -84,6 +84,7 @@ public:
 
     virtual ssize_t write_to_fd(int fd);
     virtual bool    append(const byte* ptr, size_t sz);
+    virtual bool    append(Buffer& buffer);
 
     /**
      * Copy the first several bytes to pointer ptr.
@@ -114,12 +115,12 @@ public:
      * Iterator for the first page.
      * @return The page iterator.
      */
-    PageIterator page_begin() { return cow_info_->pages_.begin(); }
+    PageIterator page_begin() const { return cow_info_->pages_.begin(); }
     /**
      * Iterator for the last page.
      * @return The page iterator.
      */
-    PageIterator page_end() { return cow_info_->pages_.end(); }
+    PageIterator page_end() const { return cow_info_->pages_.end(); }
     /**
      * Get pointer of the first page.  To get the boundary of this pointer,
      * use get_page_segment().

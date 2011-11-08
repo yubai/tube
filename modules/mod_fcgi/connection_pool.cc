@@ -30,6 +30,11 @@ ConnectionPool::alloc_connection(bool& is_connected)
     int sock = -1;
     utils::Lock lk(mutex_);
     if (free_connections_.empty()) {
+        if (!error_connections_.empty()) {
+            sock = error_connections_.back();
+            error_connections_.pop_back();
+            goto need_conn;
+        }
         if (max_n_sockets_ > 0
                && sockets_.size() > (size_t) max_n_sockets_) {
             // number of sockets limit exceeds, wait
@@ -37,6 +42,7 @@ ConnectionPool::alloc_connection(bool& is_connected)
             goto done;
         }
         sock = create_socket();
+    need_conn:
         if (sock > 0) {
             sockets_.push_back(sock);
         }
@@ -56,6 +62,14 @@ ConnectionPool::reclaim_connection(int sock)
     utils::Lock lk(mutex_);
     free_connections_.push_back(sock);
     cond_.notify_one();
+}
+
+void
+ConnectionPool::reclaim_error_connection(int sock)
+{
+    ::shutdown(sock, SHUT_RDWR);
+    utils::Lock lk(mutex_);
+    error_connections_.push_back(sock);
 }
 
 UnixConnectionPool::UnixConnectionPool(const std::string& address,

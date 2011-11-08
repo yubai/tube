@@ -49,6 +49,16 @@ ignore_compare(const std::string& p, const std::string& q)
     return true;
 }
 
+std::string
+string_to_upper_case(const std::string& str)
+{
+    std::string result = str;
+    for (size_t i = 0; i < str.length(); i++) {
+        result[i] = toupper(result[i]);
+    }
+    return result;
+}
+
 bool
 parse_bool(const std::string& str)
 {

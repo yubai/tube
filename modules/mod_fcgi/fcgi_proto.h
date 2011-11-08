@@ -28,6 +28,8 @@ public:
     int  prepare_request(size_t size);
     void done_request();
 
+    Buffer& result_buffer() { return buffer_; }
+
 private:
     void done_environment();
 };
@@ -94,6 +96,8 @@ public:
     int  parse(const char* str, size_t size);
     bool has_error() const;
     bool is_done() const { return done_parse_; }
+    bool is_streaming() const { return is_streaming_; }
+    const std::string& status_text() const { return status_text_; }
 
     std::vector<Pair> headers() const { return headers_; }
 
@@ -109,6 +113,8 @@ private:
     const char* value_mark_;
     int         state_;
     bool        done_parse_;
+    bool        is_streaming_;
+    std::string status_text_;
 
     Pair              header_line_;
     std::vector<Pair> headers_;
