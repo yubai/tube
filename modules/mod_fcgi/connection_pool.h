@@ -20,7 +20,7 @@ public:
 
     int  alloc_connection(bool& is_connected);
     void reclaim_connection(int sock);
-    void reclaim_error_connection(int sock);
+    void reclaim_inactive_connection(int sock);
 
     virtual bool connect(int sock) = 0;
 protected:
@@ -29,10 +29,10 @@ protected:
 protected:
     std::string address_;
     int max_n_sockets_;
+    bool initialized_;
 
-    std::vector<int> free_connections_;
-    std::vector<int> error_connections_;
-    std::vector<int> sockets_;
+    std::vector<int> active_connections_;
+    std::vector<int> inactive_connections_;
     utils::Mutex     mutex_;
     utils::Condition cond_;
 };

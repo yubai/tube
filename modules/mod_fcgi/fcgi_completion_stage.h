@@ -9,6 +9,7 @@
 #include "http/connection.h"
 
 #include "fcgi_proto.h"
+#include "connection_pool.h"
 
 namespace tube {
 namespace fcgi {
@@ -31,7 +32,7 @@ struct FcgiCompletionContinuation
     bool                 need_reconnect;
     FcgiCompletionStatus status;
     Buffer               task_buffer;
-    size_t               task_len;
+    int                  task_len;
     FcgiResponseParser   response_parser;
     FcgiContentParser    content_parser;
     Buffer               output_buffer;
@@ -46,11 +47,14 @@ struct FcgiCompletionContinuation
 class FcgiCompletionStage : public PollStage
 {
     Stage*            write_back_stage_;
+    ConnectionPool*   pool_;
 public:
     FcgiCompletionStage();
     virtual ~FcgiCompletionStage();
 
     void initialize();
+
+    void set_connection_pool(ConnectionPool* pool) { pool_ = pool; }
 
     bool sched_add(Connection* conn);
     void sched_remove(Connection* conn);
@@ -58,6 +62,7 @@ public:
     void main_loop();
 
     void stream_write_back(HttpConnection* conn);
+    bool run_parser(FcgiCompletionContinuation* cont);
 
 private:
     void handle_connection(Poller& poller, Connection* conn, PollerEvent evt);
@@ -65,8 +70,7 @@ private:
     void handle_write(Poller& poller, Connection* conn);
     void handle_error(Poller& poller, Connection* conn);
 
-    void transfer_status(Poller& poller, HttpConnection* conn);
-    bool run_parser(FcgiCompletionContinuation* cont);
+    FcgiCompletionStatus transfer_status(Poller& poller, HttpConnection* conn);
 };
 
 }

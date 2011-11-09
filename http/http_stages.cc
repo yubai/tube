@@ -201,6 +201,7 @@ HttpHandlerStage::resched_continuation(HttpConnection* conn)
 {
     sched_add(conn);
     conn->unlock(); // unlock for scheduling
+    pipeline_.reschedule_all();
 }
 
 }

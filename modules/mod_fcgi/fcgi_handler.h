@@ -32,6 +32,31 @@ private:
                        FcgiCompletionContinuation* cont);
     void setup_environment(HttpRequest& request, FcgiEnvironment& cgi_env);
 
+    void process_continuation_start(HttpRequest& request,
+                                    HttpResponse& response,
+                                    HttpConnection* conn,
+                                    FcgiCompletionContinuation* cont);
+
+    void process_headers_done(HttpRequest& request,
+                              HttpResponse& response,
+                              HttpConnection* conn,
+                              FcgiCompletionContinuation* cont);
+
+    void process_continue(HttpRequest& request,
+                          HttpResponse& response,
+                          HttpConnection* conn,
+                          FcgiCompletionContinuation* cont);
+
+    void process_eof(HttpRequest& request,
+                     HttpResponse& response,
+                     HttpConnection* conn,
+                     FcgiCompletionContinuation* cont);
+
+    void process_error(HttpRequest& request,
+                       HttpResponse& response,
+                       HttpConnection* conn,
+                       FcgiCompletionContinuation* cont);
+
 private:
     ConnectionPool* conn_pool_;
     FcgiCompletionStage* completion_stage_;

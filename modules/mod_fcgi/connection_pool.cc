@@ -9,67 +9,77 @@ namespace tube {
 namespace fcgi {
 
 ConnectionPool::ConnectionPool(const std::string& address, int max_n_sockets)
-    : address_(address), max_n_sockets_(max_n_sockets)
-{
-    if (max_n_sockets_ > 0) {
-        sockets_.reserve(max_n_sockets_);
-    }
-}
+    : address_(address), max_n_sockets_(max_n_sockets), initialized_(false)
+{}
 
 ConnectionPool::~ConnectionPool()
 {
-    for (size_t i = 0; i < sockets_.size(); i++) {
-        ::shutdown(sockets_[i], SHUT_RDWR);
-        ::close(sockets_[i]);
+    if (!initialized_)
+        return;
+    for (size_t i = 0; i < active_connections_.size(); i++) {
+        ::close(active_connections_[i]);
+    }
+    for (size_t i = 0; i < inactive_connections_.size(); i++) {
+        ::close(inactive_connections_[i]);
     }
 }
 
 int
 ConnectionPool::alloc_connection(bool& is_connected)
 {
-    int sock = -1;
-    utils::Lock lk(mutex_);
-    if (free_connections_.empty()) {
-        if (!error_connections_.empty()) {
-            sock = error_connections_.back();
-            error_connections_.pop_back();
-            goto need_conn;
-        }
-        if (max_n_sockets_ > 0
-               && sockets_.size() > (size_t) max_n_sockets_) {
-            // number of sockets limit exceeds, wait
-            cond_.wait(lk);
-            goto done;
-        }
-        sock = create_socket();
-    need_conn:
-        if (sock > 0) {
-            sockets_.push_back(sock);
-        }
-        is_connected = false;
+    if (max_n_sockets_ < 0) {
+        // no pooling
+        int sock = create_socket();
+        utils::set_socket_blocking(sock, false);
         return sock;
     }
-done:
-    is_connected = true;
-    sock = free_connections_.back();
-    free_connections_.pop_back();
-    return sock;
+    if (!initialized_) {
+        for (int i = 0; i < max_n_sockets_; i++) {
+            int sock = create_socket();
+            utils::set_socket_blocking(sock, false);
+            inactive_connections_.push_back(sock);
+        }
+        initialized_ = true;
+    }
+    int sock = -1;
+    utils::Lock lk(mutex_);
+    while (active_connections_.empty() && inactive_connections_.empty()) {
+        // cond_.wait(lk);
+        return -1;
+    }
+
+    if (active_connections_.empty()) {
+        sock = inactive_connections_.back();
+        inactive_connections_.pop_back();
+        is_connected = false;
+        return sock;
+    } else {
+        is_connected = true;
+        sock = active_connections_.back();
+        active_connections_.pop_back();
+        return sock;
+    }
 }
 
 void
 ConnectionPool::reclaim_connection(int sock)
 {
+    if (max_n_sockets_ < 0) {
+        ::shutdown(sock, SHUT_RDWR);
+        ::close(sock);
+        return;
+    }
     utils::Lock lk(mutex_);
-    free_connections_.push_back(sock);
+    active_connections_.push_back(sock);
     cond_.notify_one();
 }
 
 void
-ConnectionPool::reclaim_error_connection(int sock)
+ConnectionPool::reclaim_inactive_connection(int sock)
 {
-    ::shutdown(sock, SHUT_RDWR);
+    ::close(sock);
     utils::Lock lk(mutex_);
-    error_connections_.push_back(sock);
+    inactive_connections_.push_back(create_socket());
 }
 
 UnixConnectionPool::UnixConnectionPool(const std::string& address,
@@ -96,7 +106,7 @@ bool
 UnixConnectionPool::connect(int sock)
 {
     if (::connect(sock, (struct sockaddr*) &sock_addr_,
-                  sizeof(struct sockaddr_un)) < 0) {
+                  sizeof(struct sockaddr_un)) < 0 && errno != EINPROGRESS) {
         LOG(ERROR, "cannot connect to unix domain socket: %s", strerror(errno));
         return false;
     }
@@ -152,7 +162,8 @@ TcpConnectionPool::create_socket()
 bool
 TcpConnectionPool::connect(int sock)
 {
-    if (::connect(sock, sock_addr_, sock_addr_len_) < 0) {
+    if (::connect(sock, sock_addr_, sock_addr_len_) < 0
+        && errno != EINPROGRESS) {
         LOG(ERROR, "cannot connect socket: %s", strerror(errno));
         return false;
     }

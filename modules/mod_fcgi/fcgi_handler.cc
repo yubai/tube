@@ -8,7 +8,7 @@ namespace fcgi {
 FcgiHttpHandler::FcgiHttpHandler()
 {
     // temporal test!
-    conn_pool_ = new TcpConnectionPool("127.0.0.1:9000", 128);
+    conn_pool_ = new TcpConnectionPool("127.0.0.1:9000", -1);
     completion_stage_ = (FcgiCompletionStage*)
         Pipeline::instance().find_stage("fcgi_completion");
 }
@@ -49,73 +49,156 @@ FcgiHttpHandler::setup_environment(HttpRequest& request,
 }
 
 void
+FcgiHttpHandler::process_continuation_start(HttpRequest& request,
+                                             HttpResponse& response,
+                                             HttpConnection* conn,
+                                             FcgiCompletionContinuation* cont)
+{
+    bool is_connected = false;
+    int sock_fd = conn_pool_->alloc_connection(is_connected);
+    if (sock_fd < 0) {
+        response.respond_with_message(
+            HttpResponseStatus::kHttpResponseBadGateway);
+        return;
+    }
+    if (!is_connected) {
+        if (!conn_pool_->connect(sock_fd)) {
+            conn_pool_->reclaim_inactive_connection(sock_fd);
+            response.respond_with_message(
+                HttpResponseStatus::kHttpResponseBadGateway);
+            return;
+        }
+    }
+    FcgiEnvironment cgi_env(sock_fd);
+    cgi_env.begin_request();
+    setup_environment(request, cgi_env);
+    cgi_env.commit_environment();
+    cgi_env.prepare_request(request.content_length());
+    // all setups are done, need to create the continuation
+    cont = new FcgiCompletionContinuation();
+    cont->sock_fd = sock_fd;
+    cont->task_buffer = cgi_env.result_buffer();
+    cont->task_buffer.append(conn->in_stream().buffer());
+    if (cont->task_buffer.size() < request.content_length()) {
+        cont->task_len =
+            request.content_length() - cont->task_buffer.size();
+    }
+    if (cont->task_len > 0) {
+        cont->status = kCompletionReadClient;
+    } else {
+        cont->status = kCompletionWriteFcgi;
+    }
+    fprintf(stderr, "sending to completion stage %p\n", conn);
+    yield(response, conn, cont);
+}
+
+void
+FcgiHttpHandler::process_headers_done(HttpRequest& request,
+                                      HttpResponse& response,
+                                      HttpConnection* conn,
+                                      FcgiCompletionContinuation* cont)
+{
+    FcgiContentParser& content_parser = cont->content_parser;
+    // done with the headers. here, we should decide to do output buffering
+    // or streaming
+    if (content_parser.has_error()) {
+        response.respond_with_message(
+            HttpResponseStatus::kHttpResponseBadGateway);
+        return;
+    }
+    if (content_parser.is_streaming()) {
+        fprintf(stderr, "streaming...\n");
+        make_response(response, content_parser, cont);
+    }
+    fprintf(stderr, "completion stage said that header is complete\n");
+    while (completion_stage_->run_parser(cont)) {
+        if (cont->task_len == 0) {
+            cont->status = kCompletionEOF;
+            process_eof(request, response, conn, cont);
+            return;
+        }
+        if (cont->content_parser.has_error()) {
+            cont->status = kCompletionError;
+            process_error(request, response, conn, cont);
+            return;
+        }
+    }
+    cont->status = kCompletionReadFcgi;
+    yield(response, conn, cont);
+}
+
+void
+FcgiHttpHandler::process_continue(HttpRequest& request,
+                                  HttpResponse& response,
+                                  HttpConnection* conn,
+                                  FcgiCompletionContinuation* cont)
+{
+    // streaming partially complete
+    cont->status = kCompletionReadFcgi;
+    fprintf(stderr, "need to go on\n");
+    yield(response, conn, cont);
+}
+
+void
+FcgiHttpHandler::process_eof(HttpRequest& request,
+                             HttpResponse& response,
+                             HttpConnection* conn,
+                             FcgiCompletionContinuation* cont)
+{
+    fprintf(stderr, "we're done\n");
+    conn_pool_->reclaim_connection(cont->sock_fd);
+    // all done. should make a response
+    FcgiContentParser& content_parser = cont->content_parser;
+    if (content_parser.is_streaming()) {
+        response.force_responded();
+    } else {
+        response.set_content_length(cont->output_buffer.size());
+        make_response(response, content_parser, cont);
+        conn->out_stream().append_buffer(cont->output_buffer);
+    }
+}
+
+void
+FcgiHttpHandler::process_error(HttpRequest& request,
+                               HttpResponse& response,
+                               HttpConnection* conn,
+                               FcgiCompletionContinuation* cont)
+{
+    fprintf(stderr, "we're in error\n");
+    if (cont->need_reconnect) {
+        conn_pool_->reclaim_inactive_connection(cont->sock_fd);
+        if (cont->content_parser.is_streaming()) {
+            // upstream error when streaming...
+            // close the connection
+            response.close();
+            return;
+        }
+    } else {
+        conn_pool_->reclaim_connection(cont->sock_fd);
+    }
+    response.respond_with_message(
+        HttpResponseStatus::kHttpResponseBadGateway);
+}
+
+void
 FcgiHttpHandler::handle_request(HttpRequest& request, HttpResponse& response)
 {
     FcgiCompletionContinuation* cont =
         (FcgiCompletionContinuation*) response.restore_continuation();
     HttpConnection* conn = (HttpConnection*) request.connection();
-
+    fprintf(stderr, "handle_request %p cont: %p\n", conn, cont);
     if (cont == NULL) {
-        bool is_connected = false;
-        int sock_fd = conn_pool_->alloc_connection(is_connected);
-        if (!is_connected) {
-            fprintf(stderr, "connecting...\n");
-            conn_pool_->connect(sock_fd);
-        }
-        utils::set_socket_blocking(sock_fd, false);
-        FcgiEnvironment cgi_env(sock_fd);
-        cgi_env.begin_request();
-        setup_environment(request, cgi_env);
-        cgi_env.commit_environment();
-        cgi_env.prepare_request(request.content_length());
-        // all setups are done, need to create the continuation
-        cont = new FcgiCompletionContinuation();
-        cont->sock_fd = sock_fd;
-        cont->task_buffer = cgi_env.result_buffer();
-        cont->task_buffer.append(conn->in_stream().buffer());
-        if (cont->task_buffer.size() < request.content_length()) {
-            cont->task_len =
-                request.content_length() - cont->task_buffer.size();
-        }
-        if (cont->task_len > 0) {
-            cont->status = kCompletionReadClient;
-        } else {
-            cont->status = kCompletionWriteFcgi;
-        }
-        fprintf(stderr, "sending to completion stage\n");
-        yield(response, conn, cont);
+        process_continuation_start(request, response, conn, cont);
     } else if (cont->status == kCompletionHeadersDone) {
-        FcgiContentParser& content_parser = cont->content_parser;
-        // done with the headers. here, we should decide to do output buffering
-        // or streaming
-        if (content_parser.has_error()) {
-            response.respond_with_message(
-                HttpResponseStatus::kHttpResponseBadGateway);
-            return;
-        }
-        if (content_parser.is_streaming()) {
-            make_response(response, content_parser, cont);
-        }
-        cont->status = kCompletionReadFcgi;
-        fprintf(stderr, "completion stage said that header is complete\n");
-        yield(response, conn, cont);
+        process_headers_done(request, response, conn, cont);
     } else if (cont->status == kCompletionContinue) {
-        // streaming partially complete
-        cont->status = kCompletionReadFcgi;
-        fprintf(stderr, "need to go on\n");
-        yield(response, conn, cont);
+        process_continue(request, response, conn, cont);
     } else if (cont->status == kCompletionEOF) {
-        fprintf(stderr, "we're done\n");
-        conn_pool_->reclaim_connection(cont->sock_fd);
-        // all done. should make a response
-        FcgiContentParser& content_parser = cont->content_parser;
-        if (content_parser.is_streaming()) {
-            response.force_responded();
-        } else {
-            response.set_content_length(cont->output_buffer.size());
-            make_response(response, content_parser, cont);
-            conn->out_stream().append_buffer(cont->output_buffer);
-        }
+        process_eof(request, response, conn, cont);
+    } else if (cont->status == kCompletionError) {
+        process_error(request, response, conn, cont);
+    } else {
+        LOG(ERROR, "Unknow continuation status %d", cont->status);
     }
 }
 
