@@ -13,7 +13,7 @@ namespace tube {
 
 Connection::Connection(int sock)
     : fd_(sock), timeout_(0), in_stream_(sock), out_stream_(sock),
-      last_active_(0)
+      last_active_(0), continuation_data_(NULL)
 {
     update_last_active();
     flags_ = kFlagCorkEnabled | kFlagActive;
@@ -387,4 +387,3 @@ Pipeline::reschedule_all()
 }
 
 }
-

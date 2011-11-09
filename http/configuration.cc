@@ -102,8 +102,8 @@ public:
     }
 
     virtual bool match(HttpRequestData& req_ref) {
-        const std::string& uri = req_ref.uri;
-        return boost::xpressive::regex_match(uri.begin(), uri.end(), regex_);
+        const std::string& path = req_ref.path;
+        return boost::xpressive::regex_match(path.begin(), path.end(), regex_);
     }
 };
 

@@ -52,6 +52,10 @@ host:
         prefix: /index_theme
         chain: 
           - theme_static
-      - type: none
+      - type: regex
+        regex: "(.+)\\.php$"
         chain:
           - phpinfo
+      - type: none
+        chain:
+          - default
