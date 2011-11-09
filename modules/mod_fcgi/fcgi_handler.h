@@ -60,6 +60,8 @@ private:
 private:
     ConnectionPool* conn_pool_;
     FcgiCompletionStage* completion_stage_;
+    std::string script_filename_;
+    std::string script_dirname_;
 };
 
 class FcgiHttpHandlerFactory : public BaseHttpHandlerFactory

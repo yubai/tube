@@ -326,6 +326,7 @@ PollOutStage::~PollOutStage()
 bool
 PollOutStage::sched_add(Connection* conn)
 {
+    fprintf(stderr, "%s %p", __FUNCTION__, conn);
     utils::Lock lk(mutex_);
     current_poller_ = (current_poller_ + 1) % pollers_.size();
     Poller& poller = *pollers_[current_poller_];

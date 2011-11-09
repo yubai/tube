@@ -255,15 +255,8 @@ FcgiCompletionStage::transfer_status(Poller& poller, HttpConnection* conn)
             // EOF, no fcgi read should be done anymore.
             new_status = cont->status = kCompletionEOF;
             poller.remove_fd(cont->sock_fd);
-            if (!streaming) {
-                // no streaming, output buffer is eof, so hand in back to
-                // the handler
-                fprintf(stderr, "resched %p\n", conn);
-                conn->resched_continuation();
-            } else {
-                // streaming, so write back
-                stream_write_back(conn);
-            }
+            fprintf(stderr, "resched %p\n", conn);
+            conn->resched_continuation();
         } else if (streaming && cont->output_buffer.size()
                    > FcgiCompletionContinuation::kTaskBufferLimit) {
             // otherwise, transfer is not completed.
@@ -282,6 +275,7 @@ FcgiCompletionStage::stream_write_back(HttpConnection* conn)
         (FcgiCompletionContinuation*) conn->get_continuation();
     conn->out_stream().append_buffer(cont->output_buffer);
     conn->set_cork();
+    fprintf(stderr, "stream write back\n");
     write_back_stage_->sched_add(conn);
 }
 

@@ -6,9 +6,14 @@ namespace tube {
 namespace fcgi {
 
 FcgiHttpHandler::FcgiHttpHandler()
+    : conn_pool_(NULL)
 {
-    // temporal test!
-    conn_pool_ = new TcpConnectionPool("127.0.0.1:9000", -1);
+    add_option("connection_type", "");
+    add_option("connection_address", "");
+    add_option("connection_pool_size", "-1");
+    add_option("script_filename", "");
+    add_option("script_dirname", "");
+
     completion_stage_ = (FcgiCompletionStage*)
         Pipeline::instance().find_stage("fcgi_completion");
 }
@@ -20,7 +25,19 @@ FcgiHttpHandler::~FcgiHttpHandler()
 
 void
 FcgiHttpHandler::load_param()
-{}
+{
+    std::string conn_type = option("connection_type");
+    std::string conn_addr = option("connection_address");
+    int pool_size = utils::parse_int(option("connection_pool_size"));
+    if (conn_type == "tcp") {
+        fprintf(stderr, "tcp %s\n", conn_addr.c_str());
+        conn_pool_ = new TcpConnectionPool(conn_addr, pool_size);
+    } else if (conn_type == "unix") {
+        conn_pool_ = new UnixConnectionPool(conn_addr, pool_size);
+    }
+    script_filename_ = option("script_filename");
+    script_dirname_ = option("script_dirname");
+}
 
 void
 FcgiHttpHandler::setup_environment(HttpRequest& request,
@@ -38,8 +55,12 @@ FcgiHttpHandler::setup_environment(HttpRequest& request,
     cgi_env.set_environment("SERVER_PROTOCOL", "HTTP/1.1");
     cgi_env.set_environment("GATEWAY_INTERFACE", "CGI/1.1");
 
-    // just for testing!!
-    cgi_env.set_environment("SCRIPT_FILENAME", "/usr/share/nginx/html/info.php");
+    if (!script_filename_.empty()) {
+        cgi_env.set_environment("SCRIPT_FILENAME", script_filename_);
+    } else {
+        cgi_env.set_environment("SCRIPT_FILENAME", script_dirname_ + "/"
+                                + request.path());
+    }
 
     for (size_t i = 0; i < request.headers().size(); i++) {
         std::string cgi_key = "HTTP_";
@@ -154,8 +175,8 @@ FcgiHttpHandler::process_eof(HttpRequest& request,
     } else {
         response.set_content_length(cont->output_buffer.size());
         make_response(response, content_parser, cont);
-        conn->out_stream().append_buffer(cont->output_buffer);
     }
+    conn->out_stream().append_buffer(cont->output_buffer);
 }
 
 void
@@ -183,6 +204,11 @@ FcgiHttpHandler::process_error(HttpRequest& request,
 void
 FcgiHttpHandler::handle_request(HttpRequest& request, HttpResponse& response)
 {
+    if (conn_pool_ == NULL || (script_filename_.empty()
+                               && script_dirname_.empty())) {
+        return; // bypass
+    }
+
     FcgiCompletionContinuation* cont =
         (FcgiCompletionContinuation*) response.restore_continuation();
     HttpConnection* conn = (HttpConnection*) request.connection();

@@ -37,6 +37,9 @@ handlers:
     class_name: TestHandler
   - name: phpinfo
     module: fastcgi
+    connection_type: tcp
+    connection_address: 127.0.0.1:9000
+    script_dirname: /usr/share/nginx/html/
 
 host:
   - domain: default

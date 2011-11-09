@@ -305,6 +305,10 @@ HttpResponse::add_header(const std::string& key, const std::string& value)
     if (utils::ignore_compare(key, std::string("content-length"))) {
         content_length_ = atoll(value.c_str());
     } else {
+        if (utils::ignore_compare(key, std::string("transfer-encoding"))
+            && utils::ignore_compare(value, "chunked")) {
+            has_content_length_ = false;
+        }
         headers_.push_back(HttpHeaderItem(key, value));
     }
 }

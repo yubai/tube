@@ -9,7 +9,6 @@
 #include "http/connection.h"
 
 #include "fcgi_proto.h"
-#include "connection_pool.h"
 
 namespace tube {
 namespace fcgi {
@@ -47,14 +46,11 @@ struct FcgiCompletionContinuation
 class FcgiCompletionStage : public PollStage
 {
     Stage*            write_back_stage_;
-    ConnectionPool*   pool_;
 public:
     FcgiCompletionStage();
     virtual ~FcgiCompletionStage();
 
     void initialize();
-
-    void set_connection_pool(ConnectionPool* pool) { pool_ = pool; }
 
     bool sched_add(Connection* conn);
     void sched_remove(Connection* conn);
