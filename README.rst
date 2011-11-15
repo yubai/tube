@@ -26,6 +26,7 @@ The Tube Web Server is written in C/C++. To build Tube Web Server, you'll need t
 
 * ``yaml-cpp``
 * ``ragel`` available at `<http://www.complang.org/ragel/>`_
+* ``google-perftools`` available at  `<http://code.google.com/p/google-perftools/>`_
 
 To Build Tube, simply run ::
 
