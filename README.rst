@@ -55,7 +55,7 @@ After installation, you should be able to use ``tube-server``. Make sure that ``
 * ``module_path`` is the path containing all the modules. This is optional.
 * ``uid`` is the uid if you want ``tube`` switch uid before launch. This is optional
 
-There's a sample config file in ``test/test-yaml.conf``.
+There's a sample config file in ``test/test-conf.yaml``.
 
 License
 -------
