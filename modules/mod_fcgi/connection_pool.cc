@@ -31,6 +31,7 @@ ConnectionPool::alloc_connection(bool& is_connected)
         // no pooling
         int sock = create_socket();
         utils::set_socket_blocking(sock, false);
+        is_connected = false;
         return sock;
     }
     if (!initialized_) {

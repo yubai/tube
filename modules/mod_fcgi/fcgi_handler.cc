@@ -177,6 +177,9 @@ FcgiHttpHandler::process_eof(HttpRequest& request,
         make_response(response, content_parser, cont);
     }
     conn->out_stream().append_buffer(cont->output_buffer);
+
+    // reclaim the connection
+    conn_pool_->reclaim_connection(cont->sock_fd);
 }
 
 void

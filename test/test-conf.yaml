@@ -7,7 +7,7 @@ thread_pool:
     http_handler: 1
 
 write_back_mode: poll
-handler_auto_tuning: true
+handler_auto_tuning: false
 
 listen_queue_size: 32
 recycle_threshold: 16

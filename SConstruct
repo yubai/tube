@@ -16,6 +16,8 @@ def GetOS():
 def PassEnv(name, dstname):
     if name in os.environ:
         env[dstname] = os.environ[name]
+        return True
+    return False
 
 def CompilerMTOption():
     if GetOS() == 'Linux' or os == 'FreeBSD':
@@ -41,9 +43,8 @@ if profile:
 env = Environment(ENV=os.environ, CPPPATH=inc_path, LIBPATH=['.'])
 opts.Update(env)
 
-env.MergeFlags(cflags)
-PassEnv('CFLAGS', 'CFLAGS')
-PassEnv('CXXFLAGS', 'CXXFLAGS')
+if not (PassEnv('CFLAGS', 'CFLAGS') and PassEnv('CXXFLAGS', 'CXXFLAGS')):
+    env.MergeFlags(cflags)
 PassEnv('LDFLAGS', 'LINKFLAGS')
 env.MergeFlags([essential_cflags, CompilerMTOption()])
 
