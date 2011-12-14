@@ -50,6 +50,7 @@ typedef boost::posix_time::milliseconds TimeMilliseconds;
 
 void set_socket_blocking(int fd, bool block);
 void set_fdtable_size(size_t sz);
+void block_sigpipe();
 
 bool ignore_compare(const std::string& p, const std::string& q);
 std::string string_to_upper_case(const std::string& str);

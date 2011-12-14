@@ -111,7 +111,6 @@ Server::listen(int queue_size)
 void
 Server::main_loop()
 {
-    ::signal(SIGPIPE, SIG_IGN);
     Pipeline& pipeline = Pipeline::instance();
     Stage* stage = pipeline.find_stage("poll_in");
     while (true) {
@@ -134,4 +133,3 @@ Server::main_loop()
 }
 
 }
-

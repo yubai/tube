@@ -11,6 +11,7 @@
 #include "core/server.h"
 #include "core/stages.h"
 #include "core/wrapper.h"
+#include "utils/misc.h"
 #include "utils/logger.h"
 #include "utils/exception.h"
 
@@ -118,12 +119,13 @@ static void
 on_quit_signal(int sig)
 {
     exit(0);
-
 }
 
 int
 main(int argc, char* argv[])
 {
+    tube::utils::block_sigpipe();
+    ::signal(SIGINT, on_quit_signal);
     webserver_init(argc, argv);
     tube::ServerConfig& cfg = tube::ServerConfig::instance();
     tube::WebServer server;
@@ -133,7 +135,6 @@ main(int argc, char* argv[])
         server.listen(cfg.listen_queue_size());
         server.initialize_stages();
         server.start_stages();
-        ::signal(SIGINT, on_quit_signal);
 
         server.main_loop();
     } catch (tube::utils::SyscallException ex) {

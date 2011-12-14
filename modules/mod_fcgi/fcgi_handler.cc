@@ -30,7 +30,7 @@ FcgiHttpHandler::load_param()
     std::string conn_addr = option("connection_address");
     int pool_size = utils::parse_int(option("connection_pool_size"));
     if (conn_type == "tcp") {
-        fprintf(stderr, "tcp %s\n", conn_addr.c_str());
+        // fprintf(stderr, "tcp %s\n", conn_addr.c_str());
         conn_pool_ = new TcpConnectionPool(conn_addr, pool_size);
     } else if (conn_type == "unix") {
         conn_pool_ = new UnixConnectionPool(conn_addr, pool_size);
@@ -71,9 +71,9 @@ FcgiHttpHandler::setup_environment(HttpRequest& request,
 
 void
 FcgiHttpHandler::process_continuation_start(HttpRequest& request,
-                                             HttpResponse& response,
-                                             HttpConnection* conn,
-                                             FcgiCompletionContinuation* cont)
+                                            HttpResponse& response,
+                                            HttpConnection* conn,
+                                            FcgiCompletionContinuation* cont)
 {
     bool is_connected = false;
     int sock_fd = conn_pool_->alloc_connection(is_connected);
@@ -90,6 +90,8 @@ FcgiHttpHandler::process_continuation_start(HttpRequest& request,
             return;
         }
     }
+    request.disable_poll();
+
     FcgiEnvironment cgi_env(sock_fd);
     cgi_env.begin_request();
     setup_environment(request, cgi_env);
@@ -109,7 +111,7 @@ FcgiHttpHandler::process_continuation_start(HttpRequest& request,
     } else {
         cont->status = kCompletionWriteFcgi;
     }
-    fprintf(stderr, "sending to completion stage %p\n", conn);
+    // fprintf(stderr, "sending to completion stage %p\n", conn);
     yield(response, conn, cont);
 }
 
@@ -128,10 +130,10 @@ FcgiHttpHandler::process_headers_done(HttpRequest& request,
         return;
     }
     if (content_parser.is_streaming()) {
-        fprintf(stderr, "streaming...\n");
+        // fprintf(stderr, "streaming...\n");
         make_response(response, content_parser, cont);
     }
-    fprintf(stderr, "completion stage said that header is complete\n");
+    // fprintf(stderr, "completion stage said that header is complete\n");
     while (completion_stage_->run_parser(cont)) {
         if (cont->task_len == 0) {
             cont->status = kCompletionEOF;
@@ -156,7 +158,6 @@ FcgiHttpHandler::process_continue(HttpRequest& request,
 {
     // streaming partially complete
     cont->status = kCompletionReadFcgi;
-    fprintf(stderr, "need to go on\n");
     yield(response, conn, cont);
 }
 
@@ -166,7 +167,7 @@ FcgiHttpHandler::process_eof(HttpRequest& request,
                              HttpConnection* conn,
                              FcgiCompletionContinuation* cont)
 {
-    fprintf(stderr, "we're done\n");
+    // fprintf(stderr, "we're done\n");
     conn_pool_->reclaim_connection(cont->sock_fd);
     // all done. should make a response
     FcgiContentParser& content_parser = cont->content_parser;
@@ -180,6 +181,7 @@ FcgiHttpHandler::process_eof(HttpRequest& request,
 
     // reclaim the connection
     conn_pool_->reclaim_connection(cont->sock_fd);
+    request.enable_poll();
 }
 
 void
@@ -188,7 +190,7 @@ FcgiHttpHandler::process_error(HttpRequest& request,
                                HttpConnection* conn,
                                FcgiCompletionContinuation* cont)
 {
-    fprintf(stderr, "we're in error\n");
+    // fprintf(stderr, "we're in error\n");
     if (cont->need_reconnect) {
         conn_pool_->reclaim_inactive_connection(cont->sock_fd);
         if (cont->content_parser.is_streaming()) {
@@ -202,6 +204,7 @@ FcgiHttpHandler::process_error(HttpRequest& request,
     }
     response.respond_with_message(
         HttpResponseStatus::kHttpResponseBadGateway);
+    request.enable_poll();
 }
 
 void
@@ -215,7 +218,7 @@ FcgiHttpHandler::handle_request(HttpRequest& request, HttpResponse& response)
     FcgiCompletionContinuation* cont =
         (FcgiCompletionContinuation*) response.restore_continuation();
     HttpConnection* conn = (HttpConnection*) request.connection();
-    fprintf(stderr, "handle_request %p cont: %p\n", conn, cont);
+    // fprintf(stderr, "handle_request %p cont: %p\n", conn, cont);
     if (cont == NULL) {
         process_continuation_start(request, response, conn, cont);
     } else if (cont->status == kCompletionHeadersDone) {

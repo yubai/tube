@@ -125,7 +125,6 @@ void
 Response::close()
 {
     inactive_ = true;
-    conn_->active_close();
 }
 
 void

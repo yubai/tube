@@ -156,6 +156,7 @@ PollInStage::cleanup_connection(Connection* conn)
         ::shutdown(conn->fd(), SHUT_RDWR);
         sched_remove(conn);
         recycle_stage_->sched_add(conn);
+        printf("%s %p\n", __FUNCTION__, conn);
     }
 }
 
@@ -172,6 +173,7 @@ PollInStage::cleanup_connection(Poller& poller, Connection* conn)
         poller.remove_fd(conn->fd());
         poller.timer().remove(oldfuture, conn);
         recycle_stage_->sched_add(conn);
+        printf("%s %p\n", __FUNCTION__, conn);
     }
 }
 
@@ -326,7 +328,6 @@ PollOutStage::~PollOutStage()
 bool
 PollOutStage::sched_add(Connection* conn)
 {
-    fprintf(stderr, "%s %p", __FUNCTION__, conn);
     utils::Lock lk(mutex_);
     current_poller_ = (current_poller_ + 1) % pollers_.size();
     Poller& poller = *pollers_[current_poller_];

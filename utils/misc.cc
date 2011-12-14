@@ -1,5 +1,6 @@
 #include "pch.h"
 
+#include <signal.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <sys/syscall.h>
@@ -73,6 +74,15 @@ int
 parse_int(const std::string& str)
 {
     return atoi(str.c_str());
+}
+
+void
+block_sigpipe()
+{
+    sigset_t bset;
+    sigemptyset(&bset);
+    sigaddset(&bset, SIGPIPE);
+    sigprocmask(SIG_BLOCK, &bset, NULL);
 }
 
 }

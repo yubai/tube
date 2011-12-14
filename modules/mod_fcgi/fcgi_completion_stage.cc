@@ -1,5 +1,6 @@
 #include <cstdio>
 #include <limits.h>
+#include <signal.h>
 
 #include "fcgi_completion_stage.h"
 
@@ -32,7 +33,7 @@ FcgiCompletionStage::sched_add(Connection* conn)
     Poller& poller = *pollers_[current_poller_];
 
     int flag = kPollerEventHup | kPollerEventError;
-    fprintf(stderr, "completion roger that!\n");
+    // fprintf(stderr, "completion roger that!\n");
     if (cont->status == kCompletionReadClient) {
         return poller.add_fd(conn->fd(), conn, kPollerEventRead | flag);
     } else if (cont->status == kCompletionWriteFcgi) {
@@ -140,7 +141,7 @@ error:
 void
 FcgiCompletionStage::handle_read(Poller& poller, Connection* conn)
 {
-    fprintf(stderr, "handle_read\n");
+    // fprintf(stderr, "handle_read\n");
     // status kCompletionReadClient and kCompletionReadFcgi are supposed to be
     // handled in here
     HttpConnection* connection = (HttpConnection*) conn;
@@ -183,7 +184,7 @@ void
 FcgiCompletionStage::handle_write(Poller& poller, Connection* conn)
 {
     // only status kCompletionWriteFcgi should be handled
-    fprintf(stderr, "handle write\n");
+    // fprintf(stderr, "handle write\n");
     HttpConnection* connection = (HttpConnection*) conn;
     FcgiCompletionContinuation* cont =
         (FcgiCompletionContinuation*) connection->get_continuation();
@@ -201,6 +202,7 @@ FcgiCompletionStage::handle_write(Poller& poller, Connection* conn)
 void
 FcgiCompletionStage::handle_error(Poller& poller, Connection* conn)
 {
+    // fprintf(stderr, "handle_error %p\n", conn);
     HttpConnection* connection = (HttpConnection*) conn;
     FcgiCompletionContinuation* cont =
         (FcgiCompletionContinuation*) connection->get_continuation();
@@ -213,7 +215,7 @@ FcgiCompletionStage::handle_error(Poller& poller, Connection* conn)
         poller.remove_fd(conn->fd());
     }
     cont->status = kCompletionError;
-    fprintf(stderr, "resched %p\n", conn);
+    // fprintf(stderr, "resched %p\n", conn);
     conn->resched_continuation();
 }
 
@@ -249,13 +251,13 @@ FcgiCompletionStage::transfer_status(Poller& poller, HttpConnection* conn)
             new_status = cont->status = kCompletionHeadersDone;
             cont->task_len = INT_MAX;
             poller.remove_fd(cont->sock_fd);
-            fprintf(stderr, "resched %p\n", conn);
+            // fprintf(stderr, "resched %p\n", conn);
             conn->resched_continuation();
         } else if (cont->task_len == 0) {
             // EOF, no fcgi read should be done anymore.
             new_status = cont->status = kCompletionEOF;
             poller.remove_fd(cont->sock_fd);
-            fprintf(stderr, "resched %p\n", conn);
+            // fprintf(stderr, "resched %p\n", conn);
             conn->resched_continuation();
         } else if (streaming && cont->output_buffer.size()
                    > FcgiCompletionContinuation::kTaskBufferLimit) {
@@ -275,7 +277,7 @@ FcgiCompletionStage::stream_write_back(HttpConnection* conn)
         (FcgiCompletionContinuation*) conn->get_continuation();
     conn->out_stream().append_buffer(cont->output_buffer);
     conn->set_cork();
-    fprintf(stderr, "stream write back\n");
+    // fprintf(stderr, "stream write back\n");
     write_back_stage_->sched_add(conn);
 }
 
