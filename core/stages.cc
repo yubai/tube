@@ -156,7 +156,7 @@ PollInStage::cleanup_connection(Connection* conn)
         ::shutdown(conn->fd(), SHUT_RDWR);
         sched_remove(conn);
         recycle_stage_->sched_add(conn);
-        printf("%s %p\n", __FUNCTION__, conn);
+        // printf("%s %p\n", __FUNCTION__, conn);
     }
 }
 
@@ -173,7 +173,7 @@ PollInStage::cleanup_connection(Poller& poller, Connection* conn)
         poller.remove_fd(conn->fd());
         poller.timer().remove(oldfuture, conn);
         recycle_stage_->sched_add(conn);
-        printf("%s %p\n", __FUNCTION__, conn);
+        // printf("%s %p\n", __FUNCTION__, conn);
     }
 }
 
