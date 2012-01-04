@@ -417,9 +417,7 @@ RecycleStage::sched_add(Connection* conn)
 {
     utils::Lock lk(mutex_);
     queue_.push(conn);
-    if (conn == NULL) {
-        cond_.notify_one();
-    }
+    cond_.notify_one();
     return true;
 }
 
@@ -453,7 +451,6 @@ RecycleStage::main_loop()
         }
         mutex_.unlock();
 
-        utils::XLock lk(pipeline.mutex());
         for (size_t i = 0; i < dead_conns.size(); i++) {
             pipeline.dispose_connection(dead_conns[i]);
         }

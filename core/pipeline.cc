@@ -171,29 +171,6 @@ QueueScheduler::reschedule()
     }
 }
 
-class QueueSchedulerPickScope
-{
-    utils::Mutex&   mutex_;
-    utils::RWMutex& pipemutex_;
-public:
-    QueueSchedulerPickScope(utils::Mutex& mutex)
-        : mutex_(mutex), pipemutex_(Pipeline::instance().mutex()) {
-        lock();
-    }
-    ~QueueSchedulerPickScope() { unlock(); }
-
-    void lock() {
-        pipemutex_.lock_shared();
-        mutex_.lock();
-    }
-
-    void unlock() {
-        mutex_.unlock();
-        pipemutex_.unlock_shared();
-    }
-
-};
-
 Connection*
 QueueScheduler::pick_task_nolock_connection()
 {
@@ -212,7 +189,7 @@ QueueScheduler::pick_task_nolock_connection()
 Connection*
 QueueScheduler::pick_task_lock_connection()
 {
-    QueueSchedulerPickScope lk(mutex_);
+    utils::Lock lk(mutex_);
     while (list_.empty()) {
         if (!auto_wait(lk)) {
             return NULL;
