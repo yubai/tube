@@ -120,6 +120,8 @@ if not env.GetOption('clean'):
     env = conf.Finish()
 
 env.Command('http/http_parser.c', 'http/http_parser.rl', 'ragel -s -G2 $SOURCE -o $TARGET')
+pch = env.Command('../pch.h.gch', 'pch.h', '$CXX $CCFLAGS -fPIC -x c++-header $SOURCE -o $TARGET')
+env.Depends(source, pch)
 
 libtube = env.SharedLibrary('tube', source=source)
 libtube_web = env.SharedLibrary('tube-web', source=http_source, LIBS=['$LIBS', 'libtube'])
