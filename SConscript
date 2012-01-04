@@ -111,7 +111,7 @@ if not env.GetOption('clean'):
     for header in boost_headers:
         if not conf.CheckCXXHeader(header):
             Exit(1)
-    if not conf.CheckLibWithHeader('tcmalloc', 'google/tcmalloc.h', 'c'):
+    if not conf.CheckLib('jemalloc'):
         Exit(1)
     if not conf.CheckRagel():
         Exit(1)
@@ -120,7 +120,7 @@ if not env.GetOption('clean'):
     env = conf.Finish()
 
 env.Command('http/http_parser.c', 'http/http_parser.rl', 'ragel -s -G2 $SOURCE -o $TARGET')
-pch = env.Command('../pch.h.gch', 'pch.h', '$CXX $CCFLAGS -fPIC -x c++-header $SOURCE -o $TARGET')
+pch = env.Command('../pch.h.gch', 'pch.h', '$CXX $CXXFLAGS $CCFLAGS -fPIC -x c++-header $SOURCE -o $TARGET')
 env.Depends(source, pch)
 
 libtube = env.SharedLibrary('tube', source=source)

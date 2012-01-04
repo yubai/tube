@@ -62,7 +62,7 @@ public:
         void* ptr = MemoryPoolBase::alloc_object();
         this->unlock_pool();
         if (ptr == NULL) {
-            ptr = tc_malloc(obj_size_);
+            ptr = malloc(obj_size_);
         }
         return ptr;
     }
@@ -73,7 +73,7 @@ public:
             MemoryPoolBase::free_object(ptr);
             this->unlock_pool();
         } else {
-            tc_free(ptr);
+            free(ptr);
         }
     }
 };

@@ -24,9 +24,9 @@ The Tube Web Server is written in C/C++. To build Tube Web Server, you'll need t
   * ``boost::smart_ptr``
   * ``boost::xpressive``
 
-* ``yaml-cpp``
+* ``yaml-cpp`` available at `<http://code.google.com/p/yaml-cpp/>`_
 * ``ragel`` available at `<http://www.complang.org/ragel/>`_
-* ``google-perftools`` available at  `<http://code.google.com/p/google-perftools/>`_
+* ``jemalloc`` available at  `<http://www.canonware.com/jemalloc/>`_
 
 To Build Tube, simply run ::
 

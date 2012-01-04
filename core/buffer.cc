@@ -3,7 +3,6 @@
 #include <unistd.h>
 #include <sys/uio.h>
 #include <cstdio>
-#include <google/tcmalloc.h>
 
 #include "core/buffer.h"
 #include "utils/exception.h"
@@ -16,8 +15,8 @@ namespace tube {
 const size_t Buffer::kPageSize = 8192;
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
-#define ALLOC_PAGE() ((byte*) tc_malloc(kPageSize))
-#define FREE_PAGE(page) (tc_free(page))
+#define ALLOC_PAGE() ((byte*) malloc(kPageSize))
+#define FREE_PAGE(page) (free(page))
 
 Buffer::Buffer()
 {
