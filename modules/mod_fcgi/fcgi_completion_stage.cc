@@ -7,7 +7,7 @@
 namespace tube {
 namespace fcgi {
 
-const size_t FcgiCompletionContinuation::kTaskBufferLimit = 64; // just for test
+const size_t FcgiCompletionContinuation::kTaskBufferLimit = 64 << 10;
 
 bool
 FcgiCompletionContinuation::update_last_active()

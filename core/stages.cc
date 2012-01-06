@@ -255,7 +255,6 @@ PollInStage::post_handle_connection(Poller& poller)
         }
         mutex_.unlock();
     }
-    recycle_stage_->sched_add(NULL); // add recycle barrier
 }
 
 void
