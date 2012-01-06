@@ -51,7 +51,8 @@ Timer::set(Timer::Unit unit, Timer::Context ctx, const Timer::Callback& call)
 }
 
 void
-Timer::replace(Timer::Unit unit, Timer::Context ctx, const Timer::Callback& call)
+Timer::replace(Timer::Unit unit, Timer::Context ctx,
+               const Timer::Callback& call)
 {
     // utils::Lock lk(mutex_);
     rbtree_.insert(std::make_pair(TimerKey(unit, ctx), call));

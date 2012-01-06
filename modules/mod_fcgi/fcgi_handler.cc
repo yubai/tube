@@ -142,7 +142,7 @@ FcgiHttpHandler::process_headers_done(HttpRequest& request,
         }
         if (cont->content_parser.has_error()) {
             cont->status = kCompletionError;
-            process_error(request, response, conn, cont);
+            process_abort(request, response, conn, cont);
             return;
         }
     }
@@ -185,7 +185,7 @@ FcgiHttpHandler::process_eof(HttpRequest& request,
 }
 
 void
-FcgiHttpHandler::process_error(HttpRequest& request,
+FcgiHttpHandler::process_abort(HttpRequest& request,
                                HttpResponse& response,
                                HttpConnection* conn,
                                FcgiCompletionContinuation* cont)
@@ -202,8 +202,13 @@ FcgiHttpHandler::process_error(HttpRequest& request,
     } else {
         conn_pool_->reclaim_connection(cont->sock_fd);
     }
-    response.respond_with_message(
-        HttpResponseStatus::kHttpResponseBadGateway);
+    if (cont->status == kCompletionError) {
+        response.respond_with_message(
+            HttpResponseStatus::kHttpResponseBadGateway);
+    } else if (cont->status == kCompletionTimeout) {
+        response.respond_with_message(
+            HttpResponseStatus::kHttpResponseGatewayTimeout);
+    }
     request.enable_poll();
 }
 
@@ -227,8 +232,9 @@ FcgiHttpHandler::handle_request(HttpRequest& request, HttpResponse& response)
         process_continue(request, response, conn, cont);
     } else if (cont->status == kCompletionEOF) {
         process_eof(request, response, conn, cont);
-    } else if (cont->status == kCompletionError) {
-        process_error(request, response, conn, cont);
+    } else if (cont->status == kCompletionError
+               || cont->status == kCompletionTimeout) {
+        process_abort(request, response, conn, cont);
     } else {
         LOG(ERROR, "Unknow continuation status %d", cont->status);
     }

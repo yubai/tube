@@ -183,9 +183,11 @@ PollInStage::cleanup_idle_connection_callback(Poller& poller, void* ptr)
     Connection* conn = (Connection*) ptr;
     if (!conn->try_lock())
         return false;
-    cleanup_connection(poller, conn);
+    ::shutdown(conn->fd(), SHUT_RDWR);
+    poller.remove_fd(conn->fd());
+    recycle_stage_->sched_add(conn);
     conn->unlock();
-    return true;
+    return true; // returning tree, so timer will delete this callback
 }
 
 void

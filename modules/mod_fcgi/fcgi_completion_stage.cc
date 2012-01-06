@@ -9,9 +9,24 @@ namespace fcgi {
 
 const size_t FcgiCompletionContinuation::kTaskBufferLimit = 64; // just for test
 
+bool
+FcgiCompletionContinuation::update_last_active()
+{
+    Timer::Unit current = Timer::current_timer_unit();
+    if (last_active == current) {
+        return false;
+    }
+    last_active = current;
+    return true;
+}
+
+Timer::Unit FcgiCompletionStage::kIdleTimeout = Timer::timer_unit_from_time(10);
+
 FcgiCompletionStage::FcgiCompletionStage()
     : PollStage("fcgi_completion")
-{}
+{
+    set_timeout(10);
+}
 
 FcgiCompletionStage::~FcgiCompletionStage()
 {}
@@ -55,10 +70,11 @@ FcgiCompletionStage::sched_remove(Connection* conn)
     if (cont == NULL) return;
     utils::Lock lk(mutex_);
     for (size_t i = 0; i < pollers_.size(); i++) {
+        Poller& poller = *pollers_[i];
         if (cont->status == kCompletionReadClient) {
-            if (pollers_[i]->remove_fd(conn->fd())) return;
+            if (remove_fd_with_timer(poller, conn->fd(), conn)) return;
         } else {
-            if (pollers_[i]->remove_fd(cont->sock_fd)) return;
+            if (remove_fd_with_timer(poller, cont->sock_fd, conn)) return;
         }
     }
 }
@@ -70,6 +86,10 @@ FcgiCompletionStage::main_loop()
     Poller::EventCallback evthdl =
         boost::bind(&FcgiCompletionStage::handle_connection, this,
                     boost::ref(*poller), _1, _2);
+    Poller::PollerCallback posthdl =
+        boost::bind(&FcgiCompletionStage::post_handle_connection, this,
+                    boost::ref(*poller));
+    poller->set_post_handler(posthdl);
     poller->set_event_handler(evthdl);
     add_poll(poller);
     poller->handle_event(timeout_);
@@ -87,6 +107,19 @@ FcgiCompletionStage::handle_connection(Poller& poller, Connection* conn,
         handle_read(poller, conn);
     } else if (evt & kPollerEventWrite) {
         handle_write(poller, conn);
+    }
+}
+
+void
+FcgiCompletionStage::post_handle_connection(Poller& poller)
+{
+    // fprintf(stderr, "%s\n", __FUNCTION__);
+    Timer::Unit current_unit = Timer::current_timer_unit();
+    Timer& timer = poller.timer();
+    if (timer.last_executed_time() + Timer::timer_unit_from_time(timeout_)
+        <= current_unit) {
+        timer.process_callbacks();
+        timer.set_last_executed_time(current_unit);
     }
 }
 
@@ -139,6 +172,36 @@ error:
 }
 
 void
+FcgiCompletionStage::update_idle_handler(Poller& poller,
+                                         FcgiCompletionContinuation* cont,
+                                         Connection* conn)
+{
+    Timer::Unit oldfuture = cont->last_active + kIdleTimeout;
+    Timer& timer = poller.timer();
+    if (cont->update_last_active()) {
+        // fprintf(stderr, "update idle\n");
+        Timer::Callback cb =
+            boost::bind(&FcgiCompletionStage::cleanup_idle_callback, this,
+                        boost::ref(poller), _1);
+        timer.remove(oldfuture, cont);
+        timer.replace(cont->last_active + kIdleTimeout, conn, cb);
+    }
+}
+
+bool
+FcgiCompletionStage::remove_fd_with_timer(Poller& poller, int fd,
+                                          Connection* conn)
+{
+    FcgiCompletionContinuation* cont =
+        (FcgiCompletionContinuation*) conn->get_continuation();
+    if (cont) {
+        Timer::Unit oldfuture = cont->last_active + kIdleTimeout;
+        poller.timer().remove(oldfuture, conn);
+    }
+    return poller.remove_fd(fd);
+}
+
+void
 FcgiCompletionStage::handle_read(Poller& poller, Connection* conn)
 {
     // fprintf(stderr, "handle_read\n");
@@ -148,6 +211,7 @@ FcgiCompletionStage::handle_read(Poller& poller, Connection* conn)
     FcgiCompletionContinuation* cont =
         (FcgiCompletionContinuation*) connection->get_continuation();
     ssize_t rs = -1;
+    update_idle_handler(poller, cont, conn);
     if (cont->status == kCompletionReadClient) {
         // transfer from conn->fd() to task_buffer
         rs = cont->task_buffer.read_from_fd(connection->fd());
@@ -189,6 +253,7 @@ FcgiCompletionStage::handle_write(Poller& poller, Connection* conn)
     FcgiCompletionContinuation* cont =
         (FcgiCompletionContinuation*) connection->get_continuation();
     ssize_t rs = -1;
+    update_idle_handler(poller, cont, conn);
     if (cont->status == kCompletionWriteFcgi) {
         // write data from task_buffer into cont->sock_fd
         rs = cont->task_buffer.write_to_fd(cont->sock_fd);
@@ -200,23 +265,43 @@ FcgiCompletionStage::handle_write(Poller& poller, Connection* conn)
 }
 
 void
-FcgiCompletionStage::handle_error(Poller& poller, Connection* conn)
+FcgiCompletionStage::abort(Poller& poller, Connection* conn,
+                           FcgiCompletionStatus status, bool remove_timer)
 {
-    // fprintf(stderr, "handle_error %p\n", conn);
     HttpConnection* connection = (HttpConnection*) conn;
     FcgiCompletionContinuation* cont =
         (FcgiCompletionContinuation*) connection->get_continuation();
 
     if (cont->status == kCompletionWriteFcgi
         || cont->status == kCompletionReadFcgi) {
-        poller.remove_fd(cont->sock_fd);
+        if (remove_timer) {
+            remove_fd_with_timer(poller, cont->sock_fd, conn);
+        } else {
+            poller.remove_fd(cont->sock_fd);
+        }
         cont->need_reconnect = true;
     } else {
-        poller.remove_fd(conn->fd());
+        remove_fd_with_timer(poller, conn->fd(), conn);
     }
-    cont->status = kCompletionError;
+    cont->status = status;
     // fprintf(stderr, "resched %p\n", conn);
     conn->resched_continuation();
+}
+
+
+bool
+FcgiCompletionStage::cleanup_idle_callback(Poller& poller, void* ptr)
+{
+    // fprintf(stderr, "idle clean up\n");
+    abort(poller, (Connection*) ptr, kCompletionTimeout, false);
+    return true;
+}
+
+void
+FcgiCompletionStage::handle_error(Poller& poller, Connection* conn)
+{
+    // fprintf(stderr, "handle_error %p\n", conn);
+    abort(poller, conn, kCompletionError);
 }
 
 FcgiCompletionStatus
@@ -230,7 +315,7 @@ FcgiCompletionStage::transfer_status(Poller& poller, HttpConnection* conn)
         if (cont->task_buffer.size()
             > FcgiCompletionContinuation::kTaskBufferLimit
             || cont->task_len == 0) {
-            poller.remove_fd(conn->fd());
+            remove_fd_with_timer(poller, conn->fd(), conn);
             new_status = cont->status = kCompletionWriteFcgi;
             poller.add_fd(cont->sock_fd, conn, kPollerEventWrite
                           | kPollerEventHup | kPollerEventError);
@@ -250,20 +335,20 @@ FcgiCompletionStage::transfer_status(Poller& poller, HttpConnection* conn)
         if (cont->task_len == -1) {
             new_status = cont->status = kCompletionHeadersDone;
             cont->task_len = INT_MAX;
-            poller.remove_fd(cont->sock_fd);
+            remove_fd_with_timer(poller, cont->sock_fd, conn);
             // fprintf(stderr, "resched %p\n", conn);
             conn->resched_continuation();
         } else if (cont->task_len == 0) {
             // EOF, no fcgi read should be done anymore.
             new_status = cont->status = kCompletionEOF;
-            poller.remove_fd(cont->sock_fd);
+            remove_fd_with_timer(poller, cont->sock_fd, conn);
             // fprintf(stderr, "resched %p\n", conn);
             conn->resched_continuation();
         } else if (streaming && cont->output_buffer.size()
                    > FcgiCompletionContinuation::kTaskBufferLimit) {
             // otherwise, transfer is not completed.
             new_status = cont->status = kCompletionContinue;
-            poller.remove_fd(cont->sock_fd);
+            remove_fd_with_timer(poller, cont->sock_fd, conn);
             stream_write_back(conn);
         }
     }

@@ -73,6 +73,7 @@ EpollPoller::poll_add_or_change(int fd, Connection* conn, PollerEvent evt,
                                 bool change)
 {
     struct epoll_event epoll_evt;
+    memset(&epoll_evt, 0, sizeof(struct epoll_event));
     epoll_evt.events = build_epoll_event(evt);
     epoll_evt.data.ptr = conn;
     int flag = EPOLL_CTL_ADD;

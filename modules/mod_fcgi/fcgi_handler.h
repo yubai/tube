@@ -52,7 +52,7 @@ private:
                      HttpConnection* conn,
                      FcgiCompletionContinuation* cont);
 
-    void process_error(HttpRequest& request,
+    void process_abort(HttpRequest& request,
                        HttpResponse& response,
                        HttpConnection* conn,
                        FcgiCompletionContinuation* cont);
