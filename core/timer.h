@@ -87,11 +87,16 @@ public:
         last_executed_ = last_executed;
     }
 
+    size_t size() const { return rbtree_.size(); }
+
+    void dump_all() const;
+
 private:
     struct TimerKey {
         Unit unit;
         Context ctx;
         bool operator<(const TimerKey& rhs) const;
+        bool operator==(const TimerKey& rhs) const;
         TimerKey(Unit timerunit, Context context)
             : unit(timerunit), ctx(context) {}
     };

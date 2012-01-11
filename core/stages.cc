@@ -80,8 +80,10 @@ Stage::start_thread_pool()
     }
 }
 
+int PollStage::kDefaultTimeout = 2;
+
 PollStage::PollStage(const std::string& name)
-    : Stage(name), timeout_(-1), current_poller_(0),
+    : Stage(name), timeout_(kDefaultTimeout), current_poller_(0),
       poller_name_(PollerFactory::instance().default_poller_name())
 {
 }
@@ -93,13 +95,38 @@ PollStage::add_poll(Poller* poller)
     pollers_.push_back(poller);
 }
 
-int PollInStage::kDefaultTimeout = 10;
+void
+PollStage::update_connection(Poller& poller, Connection* conn,
+                             Timer::Callback cb)
+{
+    Timer& timer = poller.timer();
+    Timer::Unit oldfuture = conn->timer_sched_time();
+    if (conn->update_last_active()) {
+        utils::Lock lk(mutex_);
+        timer.remove(oldfuture, conn);
+        timer.replace(conn->timer_sched_time(), conn, cb);
+    }
+}
+
+void
+PollStage::trigger_timer_callback(Poller& poller)
+{
+    if (mutex_.try_lock()) {
+        Timer::Unit current_unit = Timer::current_timer_unit();
+        Timer& timer = poller.timer();
+        if (timer.last_executed_time() + Timer::timer_unit_from_time(timeout_)
+            <= current_unit) {
+            timer.process_callbacks();
+            timer.set_last_executed_time(current_unit);
+        }
+        mutex_.unlock();
+    }
+}
 
 PollInStage::PollInStage()
     : PollStage("poll_in")
 {
     sched_ = NULL; // no scheduler, need to override ``sched_add``
-    timeout_ = kDefaultTimeout; // 10s by default
 }
 
 PollInStage::~PollInStage()
@@ -117,6 +144,10 @@ PollInStage::sched_add(Connection* conn)
         &PollInStage::cleanup_idle_connection_callback, this,
         boost::ref(poller), _1);
 
+    Timer::Callback cb;
+    if (poller.timer().query(conn->timer_sched_time(), conn, cb)) {
+        poller.timer().dump_all();
+    }
     poller.timer().replace(conn->timer_sched_time(), conn, callback);
     return poller.add_fd(conn->fd(), conn, kPollerEventRead | kPollerEventHup
                          | kPollerEventError);
@@ -170,10 +201,12 @@ PollInStage::cleanup_connection(Poller& poller, Connection* conn)
         conn->set_active(false);
         ::shutdown(conn->fd(), SHUT_RDWR);
 
+        utils::Lock lk(mutex_);
         poller.remove_fd(conn->fd());
         poller.timer().remove(oldfuture, conn);
         recycle_stage_->sched_add(conn);
-        // printf("%s %p\n", __FUNCTION__, conn);
+        // printf("%s %p poller: %d timer: %d\n", __FUNCTION__, conn,
+        //        poller.size(), poller.timer().size());
     }
 }
 
@@ -199,17 +232,9 @@ PollInStage::read_connection(Poller& poller, Connection* conn)
         return;
 
     // update the timer
-    Timer& timer = poller.timer();
-    Timer::Unit oldfuture = conn->timer_sched_time();
-    if (conn->update_last_active()) {
-        Timer::Callback cb =
-            boost::bind(&PollInStage::cleanup_idle_connection_callback,
-                        this, boost::ref(poller), _1);
-        utils::Lock lk(mutex_);
-        timer.remove(oldfuture, conn);
-        timer.replace(conn->timer_sched_time(), conn, cb);
-    }
-
+    update_connection(poller, conn, boost::bind(
+                          &PollInStage::cleanup_idle_connection_callback,
+                          this, boost::ref(poller), _1));
     int nread;
     do {
         nread = conn->in_stream().read_into_buffer();
@@ -220,7 +245,6 @@ PollInStage::read_connection(Poller& poller, Connection* conn)
         parser_stage_->sched_add(conn);
     } else {
         // error happened, clean it up
-        utils::Lock lk(mutex_);
         cleanup_connection(poller, conn);
     }
     conn->unlock();
@@ -233,27 +257,11 @@ PollInStage::handle_connection(Poller& poller, Connection* conn,
 {
     if ((evt & kPollerEventHup) || (evt & kPollerEventError)) {
         if (conn->try_lock()) {
-            utils::Lock lk(mutex_);
             cleanup_connection(poller, conn);
             conn->unlock();
         }
     } else if (evt & kPollerEventRead) {
         read_connection(poller, conn);
-    }
-}
-
-void
-PollInStage::post_handle_connection(Poller& poller)
-{
-    if (mutex_.try_lock()) {
-        Timer::Unit current_unit = Timer::current_timer_unit();
-        Timer& timer = poller.timer();
-        if (timer.last_executed_time() + Timer::timer_unit_from_time(timeout_)
-            <= current_unit) {
-            poller.timer().process_callbacks();
-            timer.set_last_executed_time(current_unit);
-        }
-        mutex_.unlock();
     }
 }
 
@@ -265,7 +273,7 @@ PollInStage::main_loop()
         boost::bind(&PollInStage::handle_connection, this, boost::ref(*poller),
                     _1, _2);
     Poller::PollerCallback posthdl =
-        boost::bind(&PollInStage::post_handle_connection, this,
+        boost::bind(&PollInStage::trigger_timer_callback, this,
                     boost::ref(*poller));
 
     poller->set_post_handler(posthdl);
@@ -334,6 +342,7 @@ PollOutStage::sched_add(Connection* conn)
     Poller& poller = *pollers_[current_poller_];
     pipeline_.disable_poll(conn);
     conn->set_cork();
+    conn->update_last_active(); // update the initial timestamp for timeout
     return poller.add_fd(conn->fd(), conn, kPollerEventWrite | kPollerEventHup
                          | kPollerEventError);
 }
@@ -343,8 +352,20 @@ PollOutStage::cleanup_connection(Poller& poller, Connection* conn)
 {
     utils::Lock lk(mutex_);
     poller.remove_fd(conn->fd());
+    poller.timer().remove(conn->timer_sched_time(), conn);
     conn->unlock();
     pipeline_.reschedule_all();
+}
+
+bool
+PollOutStage::cleanup_idle_connection_callback(Poller& poller, void* ptr)
+{
+    Connection* conn = (Connection*) ptr;
+    conn->clear_cork();
+    conn->active_close();
+    poller.remove_fd(conn->fd());
+    conn->unlock();
+    return true;
 }
 
 void
@@ -356,6 +377,9 @@ PollOutStage::handle_connection(Poller& poller, Connection* conn,
         conn->active_close();
         cleanup_connection(poller, conn);
     } else {
+        update_connection(poller, conn, boost::bind(
+                              &PollOutStage::cleanup_idle_connection_callback,
+                              this, boost::ref(poller), _1));
         OutputStream& out = conn->out_stream();
         int nwrite = 0;
         bool has_error = false;
@@ -371,7 +395,9 @@ PollOutStage::handle_connection(Poller& poller, Connection* conn,
             conn->clear_cork();
 
             if (conn->has_continuation()) {
+                utils::Lock lk(mutex_);
                 poller.remove_fd(conn->fd());
+                poller.timer().remove(conn->timer_sched_time(), conn);
                 conn->resched_continuation();
                 return;
             }
@@ -393,6 +419,10 @@ PollOutStage::main_loop()
     Poller::EventCallback evthdl =
         boost::bind(&PollOutStage::handle_connection, this, boost::ref(*poller),
                     _1, _2);
+    Poller::PollerCallback posthdl =
+        boost::bind(&PollOutStage::trigger_timer_callback, this,
+                    boost::ref(*poller));
+    poller->set_post_handler(posthdl);
     poller->set_event_handler(evthdl);
     add_poll(poller);
     poller->handle_event(timeout_);
@@ -436,19 +466,13 @@ RecycleStage::main_loop()
     std::vector<Connection*> dead_conns;
     while (true) {
         mutex_.lock();
-        while (true) {
+        while (dead_conns.size() < recycle_batch_size_) {
             while (queue_.empty()) {
                 cond_.wait(mutex_);
             }
             Connection* conn = queue_.front();
             queue_.pop();
-            if (conn) {
-                dead_conns.push_back(conn);
-            } else {
-                if (dead_conns.size() > recycle_batch_size_) {
-                    break;
-                }
-            }
+            dead_conns.push_back(conn);
         }
         mutex_.unlock();
 

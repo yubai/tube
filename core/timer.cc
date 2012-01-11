@@ -22,7 +22,14 @@ namespace tube {
 bool
 Timer::TimerKey::operator<(const TimerKey& rhs) const
 {
-    return (unit < rhs.unit && (long) ctx < (long) rhs.ctx);
+    return (unit < rhs.unit)
+        || (unit == rhs.unit && (long) ctx < (long) rhs.ctx);
+}
+
+bool
+Timer::TimerKey::operator==(const TimerKey& rhs) const
+{
+    return (unit == rhs.unit && (long) ctx == (long) rhs.ctx);
 }
 
 int Timer::kUnitGran = 2; // 2 seconds
@@ -107,6 +114,14 @@ Timer::process_callbacks()
         rbtree_.erase(garbage[i]);
     }
     // nolock_ = false;
+}
+
+void
+Timer::dump_all() const
+{
+    for (TimerTree::const_iterator it = rbtree_.begin(); it != rbtree_.end(); ++it) {
+        fprintf(stderr, "timer obj: %d %p\n", it->first.unit, it->first.ctx);
+    }
 }
 
 }

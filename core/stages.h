@@ -84,10 +84,15 @@ public:
 class PollStage : public Stage
 {
 protected:
+    static int kDefaultTimeout;
+
     PollStage(const std::string& name);
     virtual ~PollStage() {}
 
     void add_poll(Poller* poller);
+    void trigger_timer_callback(Poller& poller);
+    void update_connection(Poller& poller, Connection* conn,
+                           Timer::Callback cb);
 public:
     int timeout() const { return timeout_; }
     /**
@@ -118,8 +123,6 @@ class PollInStage : public PollStage
     Stage* parser_stage_;
     Stage* recycle_stage_;
 public:
-    static int kDefaultTimeout;
-
     PollInStage();
     ~PollInStage();
 
@@ -174,6 +177,8 @@ public:
 private:
     void cleanup_connection(Poller& poller, Connection* conn);
     void handle_connection(Poller& poller, Connection* conn, PollerEvent evt);
+    void post_handle_connection(Poller& poller);
+    bool cleanup_idle_connection_callback(Poller& poller, void* ptr);
 };
 
 /**
