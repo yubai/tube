@@ -80,7 +80,7 @@ Stage::start_thread_pool()
     }
 }
 
-int PollStage::kDefaultTimeout = 2;
+int PollStage::kDefaultTimeout = Timer::kUnitGran;
 
 PollStage::PollStage(const std::string& name)
     : Stage(name), timeout_(kDefaultTimeout), current_poller_(0),
@@ -144,10 +144,6 @@ PollInStage::sched_add(Connection* conn)
         &PollInStage::cleanup_idle_connection_callback, this,
         boost::ref(poller), _1);
 
-    Timer::Callback cb;
-    if (poller.timer().query(conn->timer_sched_time(), conn, cb)) {
-        poller.timer().dump_all();
-    }
     poller.timer().replace(conn->timer_sched_time(), conn, callback);
     return poller.add_fd(conn->fd(), conn, kPollerEventRead | kPollerEventHup
                          | kPollerEventError);

@@ -67,7 +67,6 @@ public:
 
 private:
     void handle_connection(Poller& poller, Connection* conn, PollerEvent evt);
-    void post_handle_connection(Poller& poller);
 
     void abort(Poller& poller, Connection* conn, FcgiCompletionStatus status,
                bool remove_timer = true);

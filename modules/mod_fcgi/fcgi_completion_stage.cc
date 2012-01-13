@@ -46,6 +46,12 @@ FcgiCompletionStage::sched_add(Connection* conn)
     utils::Lock lk(mutex_);
     current_poller_ = (current_poller_ + 1) % pollers_.size();
     Poller& poller = *pollers_[current_poller_];
+    Timer& timer = poller.timer();
+    Timer::Callback callback = boost::bind(
+        &FcgiCompletionStage::cleanup_idle_callback, this,
+        boost::ref(poller), _1);
+    cont->update_last_active();
+    timer.replace(cont->last_active + kIdleTimeout, conn, callback);
 
     int flag = kPollerEventHup | kPollerEventError;
     // fprintf(stderr, "completion roger that!\n");
@@ -87,7 +93,7 @@ FcgiCompletionStage::main_loop()
         boost::bind(&FcgiCompletionStage::handle_connection, this,
                     boost::ref(*poller), _1, _2);
     Poller::PollerCallback posthdl =
-        boost::bind(&FcgiCompletionStage::post_handle_connection, this,
+        boost::bind(&FcgiCompletionStage::trigger_timer_callback, this,
                     boost::ref(*poller));
     poller->set_post_handler(posthdl);
     poller->set_event_handler(evthdl);
@@ -107,19 +113,6 @@ FcgiCompletionStage::handle_connection(Poller& poller, Connection* conn,
         handle_read(poller, conn);
     } else if (evt & kPollerEventWrite) {
         handle_write(poller, conn);
-    }
-}
-
-void
-FcgiCompletionStage::post_handle_connection(Poller& poller)
-{
-    // fprintf(stderr, "%s\n", __FUNCTION__);
-    Timer::Unit current_unit = Timer::current_timer_unit();
-    Timer& timer = poller.timer();
-    if (timer.last_executed_time() + Timer::timer_unit_from_time(timeout_)
-        <= current_unit) {
-        timer.process_callbacks();
-        timer.set_last_executed_time(current_unit);
     }
 }
 
@@ -183,7 +176,7 @@ FcgiCompletionStage::update_idle_handler(Poller& poller,
         Timer::Callback cb =
             boost::bind(&FcgiCompletionStage::cleanup_idle_callback, this,
                         boost::ref(poller), _1);
-        timer.remove(oldfuture, cont);
+        timer.remove(oldfuture, conn);
         timer.replace(cont->last_active + kIdleTimeout, conn, cb);
     }
 }
