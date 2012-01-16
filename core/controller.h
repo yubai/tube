@@ -5,6 +5,7 @@
 
 #include <set>
 #include "utils/misc.h"
+#include "utils/lock.h"
 
 namespace tube {
 
@@ -27,8 +28,8 @@ class Controller
     long              best_speed_;
     size_t            best_threads_size_;
 public:
-    static utils::TimeMilliseconds kMaxThreadIdle;
-    static utils::TimeMilliseconds kCheckAutoCreate;
+    static int kMaxThreadIdle;
+    static int kCheckAutoCreate;
 
     Controller();
     virtual ~Controller() {}

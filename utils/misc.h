@@ -33,20 +33,10 @@ typedef long long int int64;
 
 namespace utils {
 
-typedef boost::mutex Mutex;
-typedef boost::unique_lock<Mutex> Lock;
-typedef boost::condition Condition;
-
-typedef boost::shared_mutex RWMutex;
-typedef boost::shared_lock<RWMutex> SLock;
-typedef boost::unique_lock<RWMutex> XLock;
-
 typedef boost::thread Thread;
 typedef boost::thread::id ThreadId;
 
 typedef boost::noncopyable Noncopyable;
-typedef boost::posix_time::seconds TimeSeconds;
-typedef boost::posix_time::milliseconds TimeMilliseconds;
 
 void set_socket_blocking(int fd, bool block);
 void set_fdtable_size(size_t sz);

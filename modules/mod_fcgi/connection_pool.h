@@ -8,6 +8,7 @@
 #include <sys/un.h>
 #include <string>
 #include "utils/misc.h"
+#include "utils/lock.h"
 
 namespace tube {
 namespace fcgi {

@@ -59,11 +59,11 @@ Controller::decrease_load(long dec)
     current_speed_ += dec;
 }
 
-utils::TimeMilliseconds
-Controller::kMaxThreadIdle = utils::TimeMilliseconds(500);
+int
+Controller::kMaxThreadIdle = 500;
 
-utils::TimeMilliseconds
-Controller::kCheckAutoCreate = utils::TimeMilliseconds(300);
+int
+Controller::kCheckAutoCreate = 300;
 
 static const size_t
 kMaxFeedback = 16;
@@ -139,7 +139,7 @@ void
 Controller::check_thread()
 {
     while (true) {
-        boost::this_thread::sleep(kCheckAutoCreate);
+        usleep(kCheckAutoCreate * 1000);
         if (check_auto_create()) {
             LOG(INFO, "server loads high, auto-create a new thread.");
             auto_threads_.insert(stage_->start_thread());

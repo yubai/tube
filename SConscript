@@ -5,6 +5,7 @@ import os
 source = ['utils/logger.cc',
           'utils/misc.cc',
           'utils/mempool.cc',
+          'utils/lock.cc',
           'core/poller.cc',
           'core/timer.cc',
           'core/buffer.cc',

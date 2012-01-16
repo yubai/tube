@@ -251,6 +251,7 @@ void
 PollInStage::handle_connection(Poller& poller, Connection* conn,
                                PollerEvent evt)
 {
+    // fprintf(stderr, "%s %p\n", __FUNCTION__, conn);
     if ((evt & kPollerEventHup) || (evt & kPollerEventError)) {
         if (conn->try_lock()) {
             cleanup_connection(poller, conn);
@@ -398,7 +399,8 @@ PollOutStage::handle_connection(Poller& poller, Connection* conn,
                 return;
             }
 
-            if (conn->is_close_after_finish() || has_error) {
+            if (conn->is_close_after_finish() || has_error
+                || !conn->is_active()) {
                 conn->active_close();
             } else {
                 pipeline_.enable_poll(conn);

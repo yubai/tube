@@ -8,6 +8,7 @@
 #include <ctime>
 
 #include "utils/misc.h"
+#include "utils/lock.h"
 
 namespace tube {
 

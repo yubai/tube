@@ -158,7 +158,6 @@ QueueScheduler::add_task(Connection* conn)
     }
     bool need_notify = (list_.size() == 0);
     nodes_.insert(conn->fd(), list_.push_back(conn));
-    lk.unlock();
     if (need_notify) {
         cond_.notify_all();
     }
@@ -168,8 +167,23 @@ void
 QueueScheduler::reschedule()
 {
     if (!suppress_connection_lock_) {
+        utils::Lock lk(mutex_);
         cond_.notify_all();
     }
+}
+
+bool
+QueueScheduler::auto_wait(utils::Lock& lk)
+{
+    if (controller_ && controller_->is_auto_created()) {
+        if (!cond_.timed_wait(lk, Controller::kMaxThreadIdle)) {
+            controller_->exit_auto_thread();
+            return false;
+        }
+    } else {
+        cond_.wait(lk);
+    }
+    return true;
 }
 
 Connection*
@@ -343,13 +357,13 @@ void
 Pipeline::disable_poll(Connection* conn)
 {
     poll_in_stage_->sched_remove(conn);
-    utils::set_socket_blocking(conn->fd(), true);
+    // utils::set_socket_blocking(conn->fd(), true);
 }
 
 void
 Pipeline::enable_poll(Connection* conn)
 {
-    utils::set_socket_blocking(conn->fd(), false);
+    // utils::set_socket_blocking(conn->fd(), false);
     if (conn->is_active()) {
         poll_in_stage_->sched_add(conn);
     }

@@ -5,6 +5,7 @@
 
 #include "pch.h"
 #include "utils/misc.h"
+#include "utils/lock.h"
 
 namespace tube {
 namespace utils {

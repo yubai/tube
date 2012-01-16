@@ -13,6 +13,7 @@
 
 #include "utils/fdmap.h"
 #include "utils/misc.h"
+#include "utils/lock.h"
 #include "utils/list.h"
 #include "core/stream.h"
 #include "core/inet_address.h"
@@ -348,18 +349,7 @@ private:
     Connection* pick_task_nolock_connection();
     Connection* pick_task_lock_connection();
 
-    template <class LockType>
-    bool auto_wait(LockType& lk) {
-        if (controller_ && controller_->is_auto_created()) {
-            if (!cond_.timed_wait(lk, Controller::kMaxThreadIdle)) {
-                controller_->exit_auto_thread();
-                return false;
-            }
-        } else {
-            cond_.wait(lk);
-        }
-        return true;
-    }
+    bool auto_wait(utils::Lock& lk);
 };
 
 class Stage;
@@ -393,7 +383,6 @@ class Pipeline : utils::Noncopyable
 {
     typedef std::map<std::string, Stage*> StageMap;
     StageMap       map_;
-    utils::RWMutex mutex_;
 
     PollInStage*       poll_in_stage_;
     Stage*             write_back_stage_;
@@ -411,8 +400,6 @@ public:
         static Pipeline ins;
         return ins;
     }
-
-    utils::RWMutex& mutex() { return mutex_; }
 
     /**
      * Register the custom ConnectionFactory.

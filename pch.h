@@ -31,13 +31,6 @@
 #include <boost/function.hpp>
 #include <boost/bind.hpp>
 
-// Must disable assert, because pthread_mutex_unlock on BSD will return an error
-// when mutex is locked by a different thread.
-#define BOOST_DISABLE_ASSERTS
-
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/locks.hpp>
-#include <boost/thread/condition.hpp>
 #include <boost/thread.hpp>
 #include <boost/noncopyable.hpp>
 

@@ -11,6 +11,7 @@
 #include "core/poller.h"
 #include "core/controller.h"
 #include "utils/misc.h"
+#include "utils/lock.h"
 
 namespace tube {
 
