@@ -112,8 +112,8 @@ if not env.GetOption('clean'):
     for header in boost_headers:
         if not conf.CheckCXXHeader(header):
             Exit(1)
-    # if not conf.CheckLib('jemalloc'):
-    #     Exit(1)
+    if not conf.CheckLib('jemalloc'):
+        Exit(1)
     if not conf.CheckRagel():
         Exit(1)
     if not conf.SpecificConf():
