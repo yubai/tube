@@ -28,6 +28,7 @@ public:
     typedef boost::function<void (Connection*, PollerEvent)> EventCallback;
     typedef boost::function<void ()> PollerCallback;
     typedef utils::FDMap<Connection*> FDMap;
+    typedef std::list<Connection*> ExpiredConnectionList;
 
     Poller() ;
     virtual ~Poller() {}
@@ -55,11 +56,13 @@ public:
     bool remove_fd(int fd);
 
     Timer& timer() { return timer_; }
+    ExpiredConnectionList& expired_connections() { return expired_conns_; }
 protected:
     // handler when events happened
     EventCallback  handler_;
     // handler before or after events processed
     PollerCallback pre_handler_, post_handler_;
+    ExpiredConnectionList expired_conns_;
 private:
     Timer          timer_;
     FDMap          fds_;

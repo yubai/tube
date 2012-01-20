@@ -22,7 +22,7 @@ Mutex::lock()
 {
     int res = pthread_mutex_lock(&mutex_);
     if (res != 0) {
-        throw SyscallException();
+        throw Exception();
     }
 }
 
@@ -39,7 +39,8 @@ Mutex::try_lock()
 {
     int res = pthread_mutex_trylock(&mutex_);
     if (res != 0 && res != EBUSY) {
-        throw SyscallException();
+        fprintf(stderr, "error %d\n", res);
+        throw Exception();
     }
     return res == 0;
 }
@@ -100,7 +101,7 @@ void
 Condition::notify_one()
 {
     if (pthread_cond_signal(&cond_) != 0) {
-        throw SyscallException();
+        throw Exception();
     }
 }
 
@@ -108,7 +109,7 @@ void
 Condition::notify_all()
 {
     if (pthread_cond_broadcast(&cond_) != 0) {
-        throw SyscallException();
+        throw Exception();
     }
 }
 
@@ -122,7 +123,7 @@ void
 Condition::wait(Mutex& mutex)
 {
     if (pthread_cond_wait(&cond_, mutex.pthread_mutex()) != 0) {
-        throw SyscallException();
+        throw Exception();
     }
 }
 
@@ -141,7 +142,7 @@ Condition::timed_wait(Mutex& mutex, int timeout_msec)
     now.tv_nsec += (timeout_msec % 1000) * 1000000;
     int res = pthread_cond_timedwait(&cond_, mutex.pthread_mutex(), &now);
     if (res != 0 && res != ETIMEDOUT) {
-        throw SyscallException();
+        throw Exception();
     }
     return res == 0;
 }

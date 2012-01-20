@@ -319,17 +319,19 @@ Pipeline::create_connection(int fd)
     return factory_->create_connection(fd);
 }
 
-void
+bool
 Pipeline::dispose_connection(Connection* conn)
 {
     LOG(DEBUG, "disposing connection %d %p", conn->fd(), conn);
     StageMap::iterator it = map_.begin();
     Stage* stage = NULL;
 
-    conn->lock();
+    if (!conn->try_lock()) {
+        return false;
+    }
     while (it != map_.end()) {
         stage = it->second;
-        if (stage) {
+        if (stage && stage != poll_in_stage_) {
             stage->sched_remove(conn);
         }
         ++it;
@@ -338,6 +340,7 @@ Pipeline::dispose_connection(Connection* conn)
     conn->unlock();
     factory_->destroy_connection(conn);
     LOG(DEBUG, "disposed");
+    return true;
 }
 
 void
@@ -347,8 +350,6 @@ Pipeline::add_stage(const std::string& name, Stage* stage)
         poll_in_stage_ = (PollInStage*) stage;
     } else if (name == "write_back") {
         write_back_stage_ = stage;
-    } else if (name == "recycle") {
-        recycle_stage_ = (RecycleStage*) stage;
     }
     map_.insert(std::make_pair(name, stage));
 }

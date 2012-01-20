@@ -123,6 +123,9 @@ PollStage::trigger_timer_callback(Poller& poller)
     }
 }
 
+size_t
+PollInStage::kMaxRecycleCount = 100;
+
 PollInStage::PollInStage()
     : PollStage("poll_in")
 {
@@ -150,16 +153,25 @@ PollInStage::sched_add(Connection* conn)
 }
 
 void
-PollInStage::sched_remove(Connection* conn)
+PollInStage::sched_remove_nolock(Connection* conn, bool recycle)
 {
-    utils::Lock lk(mutex_);
     Timer::Unit oldfuture = conn->timer_sched_time();
     for (size_t i = 0; i < pollers_.size(); i++) {
         if (pollers_[i]->remove_fd(conn->fd())) {
             pollers_[i]->timer().remove(oldfuture, conn);
+            if (recycle) {
+                pollers_[i]->expired_connections().push_back(conn);
+            }
             return;
         }
     }
+}
+
+void
+PollInStage::sched_remove(Connection* conn)
+{
+    utils::Lock lk(mutex_);
+    sched_remove_nolock(conn, false);
 }
 
 void
@@ -168,9 +180,6 @@ PollInStage::initialize()
     parser_stage_ = Pipeline::instance().find_stage("parser");
     if (parser_stage_ == NULL)
         throw std::invalid_argument("cannot find parser stage");
-    recycle_stage_ = Pipeline::instance().find_stage("recycle");
-    if (recycle_stage_ == NULL)
-        throw std::invalid_argument("cannot find recycle stage");
 }
 
 void
@@ -181,9 +190,8 @@ PollInStage::cleanup_connection(Connection* conn)
     if (conn->is_active()) {
         conn->set_active(false);
         ::shutdown(conn->fd(), SHUT_RDWR);
-        sched_remove(conn);
-        recycle_stage_->sched_add(conn);
-        // printf("%s %p\n", __FUNCTION__, conn);
+        utils::Lock lk(mutex_);
+        sched_remove_nolock(conn, true);
     }
 }
 
@@ -200,7 +208,7 @@ PollInStage::cleanup_connection(Poller& poller, Connection* conn)
         utils::Lock lk(mutex_);
         poller.remove_fd(conn->fd());
         poller.timer().remove(oldfuture, conn);
-        recycle_stage_->sched_add(conn);
+        poller.expired_connections().push_back(conn);
         // printf("%s %p poller: %d timer: %d\n", __FUNCTION__, conn,
         //        poller.size(), poller.timer().size());
     }
@@ -214,7 +222,7 @@ PollInStage::cleanup_idle_connection_callback(Poller& poller, void* ptr)
         return false;
     ::shutdown(conn->fd(), SHUT_RDWR);
     poller.remove_fd(conn->fd());
-    recycle_stage_->sched_add(conn);
+    poller.expired_connections().push_back(conn);
     conn->unlock();
     return true; // returning tree, so timer will delete this callback
 }
@@ -263,6 +271,27 @@ PollInStage::handle_connection(Poller& poller, Connection* conn,
 }
 
 void
+PollInStage::post_handle_connection(Poller& poller)
+{
+    trigger_timer_callback(poller);
+    if (mutex_.try_lock()) {
+        Poller::ExpiredConnectionList& expired = poller.expired_connections();
+        Poller::ExpiredConnectionList::iterator it = expired.begin();
+        size_t count = 0;
+        while (it != expired.end() && count < kMaxRecycleCount) {
+            Poller::ExpiredConnectionList::iterator cur = it;
+            Connection* conn = *cur;
+            ++it;
+            if (pipeline_.dispose_connection(conn)) {
+                expired.erase(cur);
+                count++;
+            }
+        }
+        mutex_.unlock();
+    }
+}
+
+void
 PollInStage::main_loop()
 {
     Poller* poller = PollerFactory::instance().create_poller(poller_name_);
@@ -270,7 +299,7 @@ PollInStage::main_loop()
         boost::bind(&PollInStage::handle_connection, this, boost::ref(*poller),
                     _1, _2);
     Poller::PollerCallback posthdl =
-        boost::bind(&PollInStage::trigger_timer_callback, this,
+        boost::bind(&PollInStage::post_handle_connection, this,
                     boost::ref(*poller));
 
     poller->set_post_handler(posthdl);
@@ -436,49 +465,6 @@ ParserStage::ParserStage()
 ParserStage::~ParserStage()
 {
     delete sched_;
-}
-
-RecycleStage::RecycleStage()
-    : Stage("recycle"), recycle_batch_size_(1) {}
-
-bool
-RecycleStage::sched_add(Connection* conn)
-{
-    utils::Lock lk(mutex_);
-    queue_.push(conn);
-    cond_.notify_one();
-    return true;
-}
-
-void
-RecycleStage::start_thread_pool()
-{
-    // omit the thread pool size setting
-    start_thread();
-}
-
-void
-RecycleStage::main_loop()
-{
-    Pipeline& pipeline = Pipeline::instance();
-    std::vector<Connection*> dead_conns;
-    while (true) {
-        mutex_.lock();
-        while (dead_conns.size() < recycle_batch_size_) {
-            while (queue_.empty()) {
-                cond_.wait(mutex_);
-            }
-            Connection* conn = queue_.front();
-            queue_.pop();
-            dead_conns.push_back(conn);
-        }
-        mutex_.unlock();
-
-        for (size_t i = 0; i < dead_conns.size(); i++) {
-            pipeline.dispose_connection(dead_conns[i]);
-        }
-        dead_conns.clear();
-    }
 }
 
 }

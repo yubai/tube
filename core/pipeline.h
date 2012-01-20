@@ -354,7 +354,6 @@ private:
 
 class Stage;
 class PollInStage;
-class RecycleStage;
 
 /**
  * Connection factory that used for creating connection objects.  This is
@@ -386,7 +385,6 @@ class Pipeline : utils::Noncopyable
 
     PollInStage*       poll_in_stage_;
     Stage*             write_back_stage_;
-    RecycleStage*      recycle_stage_;
     ConnectionFactory* factory_;
 
     Pipeline();
@@ -408,7 +406,6 @@ public:
 
     PollInStage*    poll_in_stage() const { return poll_in_stage_; }
     Stage*          write_back_stage() const { return write_back_stage_; }
-    RecycleStage*   recycle_stage() const { return recycle_stage_; }
 
     /**
      * Register a stage.  This routine is automaticall called when Stage
@@ -442,7 +439,7 @@ public:
     /**
      * Dispose the connection and recycle the resouces.
      */
-    void        dispose_connection(Connection* conn);
+    bool        dispose_connection(Connection* conn);
 
     /**
      * Disable IO poll for a specific connection on PollInStage.

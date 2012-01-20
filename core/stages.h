@@ -122,8 +122,8 @@ protected:
 class PollInStage : public PollStage
 {
     Stage* parser_stage_;
-    Stage* recycle_stage_;
 public:
+    static size_t kMaxRecycleCount;
     PollInStage();
     ~PollInStage();
 
@@ -139,6 +139,7 @@ public:
      */
     void cleanup_connection(Connection* conn);
 private:
+    void sched_remove_nolock(Connection* conn, bool recycle);
     void cleanup_connection(Poller& poller, Connection* conn);
     void read_connection(Poller& poller, Connection* conn);
     bool cleanup_idle_connection_callback(Poller& poller, void* ptr);
@@ -193,39 +194,6 @@ public:
     virtual ~ParserStage();
 };
 
-/**
- * RecycleStage is responsible for collection unused connection objects.  When
- * a conection is no longer used, it will be add on to this stage.
- *
- * RecycleStage use a simple queue for scheduling, so no external scheduler are
- * used.  Yet, cannot tolerent any duplicate add.  This is the same consequence
- * of double free.
- *
- * RecycleStage have a threshold for collecting, because collecting routine
- * will affect scale of the whole server.
- */
-class RecycleStage : public Stage
-{
-    utils::Mutex            mutex_;
-    utils::Condition        cond_;
-    std::queue<Connection*> queue_;
-    size_t                  recycle_batch_size_;
-public:
-    RecycleStage();
-    virtual ~RecycleStage() {}
-
-    virtual bool sched_add(Connection* conn);
-    virtual void sched_remove(Connection* conn) {}
-
-    virtual void main_loop();
-    virtual void start_thread_pool();
-
-    /**
-     * Set recycle threshold.  Recycle routine will not start collecting until
-     * number of unused connection exceeds this number.
-     */
-    void set_recycle_batch_size(size_t size) { recycle_batch_size_ = size; }
-};
 
 }
 

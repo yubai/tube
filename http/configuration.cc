@@ -318,7 +318,6 @@ ServerConfig::load_config()
     HandlerConfig& handler_cfg = HandlerConfig::instance();
     VHostConfig& host_cfg = VHostConfig::instance();
     ThreadPoolConfig& thread_pool_cfg = ThreadPoolConfig::instance();
-    int recycle_threshold = 0;
 
     Node doc;
     while (parser.GetNextDocument(doc)) {
@@ -335,9 +334,6 @@ ServerConfig::load_config()
                 host_cfg.load_vhost_rules(it.second());
             } else if (key == "thread_pool") {
                 thread_pool_cfg.load_thread_pool_config(it.second());
-            } else if (key == "recycle_threshold") {
-                it.second() >> value;
-                recycle_threshold = atoi(value.c_str());
             } else if (key == "listen_queue_size") {
                 it.second() >> value;
                 listen_queue_size_ = atoi(value.c_str());
@@ -348,9 +344,6 @@ ServerConfig::load_config()
                 }
             }
         }
-    }
-    if (recycle_threshold > 0) {
-        pipeline_.recycle_stage()->set_recycle_batch_size(recycle_threshold);
     }
 }
 

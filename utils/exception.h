@@ -3,13 +3,28 @@
 #define _EXCEPTION_H_
 
 #include <stdexcept>
-#include <sstream>
 #include <string>
+#include <vector>
 #include <cstring>
 #include <errno.h>
 
 namespace tube {
 namespace utils {
+
+class Exception : public std::exception
+{
+protected:
+    std::vector<std::string> backtrace_;
+private:
+    std::string msg_;
+public:
+    Exception();
+    virtual ~Exception() throw() {}
+
+    virtual const char* what() const throw() {
+        return msg_.c_str();
+    }
+};
 
 class SyscallException : public std::exception
 {
@@ -30,16 +45,11 @@ public:
     }
 };
 
-class BufferFullException : public std::exception
+class BufferFullException : public Exception
 {
     std::string msg_;
 public:
-    BufferFullException(int max_size) {
-        std::stringstream ss;
-        ss << "buffer size reached limit " << max_size;
-        msg_ = ss.str();
-    }
-
+    BufferFullException(int max_size);
     ~BufferFullException() throw() {}
 
     virtual const char* what() const throw() {
@@ -60,11 +70,15 @@ public:
 
 };
 
-class ThreadCreationException : public std::exception
+class ThreadCreationException : public Exception
 {
+    std::string msg_;
 public:
+    ThreadCreationException();
+    virtual ~ThreadCreationException() throw() {}
+
     virtual const char* what() const throw() {
-        return "Cannot create thread";
+        return msg_.c_str();
     }
 };
 

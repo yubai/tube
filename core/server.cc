@@ -40,7 +40,6 @@ Server::Server()
 {
     // construct all essential stages
     poll_in_stage_ = new PollInStage();
-    recycle_stage_ = new RecycleStage();
     if (kDefaultWriteBackMode == kWriteBackModeBlock) {
         write_back_stage_ = new BlockOutStage();
     } else if (kDefaultWriteBackMode == kWriteBackModePoll) {
@@ -52,7 +51,6 @@ Server::~Server()
 {
     delete poll_in_stage_;
     delete write_back_stage_;
-    delete recycle_stage_;
 
     if (fd_ > 0) {
         ::shutdown(fd_, SHUT_RDWR);

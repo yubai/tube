@@ -10,7 +10,6 @@ write_back_mode: poll
 handler_auto_tuning: false
 
 listen_queue_size: 32
-recycle_threshold: 16
 enable_cork: false
 
 idle_timeout: 15
