@@ -85,5 +85,31 @@ block_sigpipe()
     sigprocmask(SIG_BLOCK, &bset, NULL);
 }
 
+static void*
+thr_routine(void* data)
+{
+    boost::function<void ()>* ptr = (boost::function<void ()>*) data;
+    (*ptr)();
+    delete ptr;
+    return NULL;
+}
+
+ThreadId
+create_thread(boost::function<void ()> func)
+{
+    boost::function<void ()>* heap_func = new boost::function<void ()>(func);
+    pthread_t tid = 0;
+    if (pthread_create(&tid, NULL, &thr_routine, heap_func) != 0) {
+        return -1;
+    }
+    return tid;
+}
+
+ThreadId
+thread_id()
+{
+    return pthread_self();
+}
+
 }
 }

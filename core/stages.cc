@@ -68,8 +68,7 @@ Stage::main_loop()
 ThreadId
 Stage::start_thread()
 {
-    Thread th(boost::bind(&Stage::main_loop, this));
-    return th.get_id();
+    return utils::create_thread(boost::bind(&Stage::main_loop, this));
 }
 
 void

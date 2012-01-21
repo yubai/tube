@@ -6,6 +6,7 @@
 #include <string>
 #include <map>
 #include <ctime>
+#include <vector>
 
 #include "utils/misc.h"
 #include "utils/lock.h"

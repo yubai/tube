@@ -4,6 +4,7 @@
 #define _CONTROLLER_H_
 
 #include <set>
+#include <vector>
 #include "utils/misc.h"
 #include "utils/lock.h"
 

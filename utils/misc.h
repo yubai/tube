@@ -5,15 +5,8 @@
 
 #include <sys/types.h>
 #include <fcntl.h>
-
-// Must disable assert, because pthread_mutex_unlock on BSD will return an error
-// when mutex is locked by a different thread.
-#define BOOST_DISABLE_ASSERTS
-
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/locks.hpp>
-#include <boost/thread/condition.hpp>
-#include <boost/thread.hpp>
+#include <pthread.h>
+#include <boost/function.hpp>
 #include <boost/noncopyable.hpp>
 
 namespace tube {
@@ -33,10 +26,11 @@ typedef long long int int64;
 
 namespace utils {
 
-typedef boost::thread Thread;
-typedef boost::thread::id ThreadId;
-
+typedef pthread_t ThreadId;
 typedef boost::noncopyable Noncopyable;
+
+ThreadId create_thread(boost::function<void ()> func);
+ThreadId thread_id();
 
 void set_socket_blocking(int fd, bool block);
 void set_fdtable_size(size_t sz);

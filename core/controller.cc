@@ -12,7 +12,7 @@ Controller::Controller()
     : reserve_(0), stage_(NULL), current_load_(0), current_speed_(0),
       best_speed_(0), best_threads_size_(0)
 {
-    utils::Thread th(boost::bind(&Controller::check_thread, this));
+    utils::create_thread(boost::bind(&Controller::check_thread, this));
 }
 
 bool
@@ -28,7 +28,7 @@ Controller::is_auto_created(utils::ThreadId id)
 bool
 Controller::is_auto_created()
 {
-    return is_auto_created(boost::this_thread::get_id());
+    return is_auto_created(utils::thread_id());
 }
 
 void
@@ -41,7 +41,7 @@ Controller::exit_auto_thread(utils::ThreadId id)
 void
 Controller::exit_auto_thread()
 {
-    exit_auto_thread(boost::this_thread::get_id());
+    exit_auto_thread(utils::thread_id());
 }
 
 void

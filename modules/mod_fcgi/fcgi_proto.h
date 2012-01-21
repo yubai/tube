@@ -3,6 +3,7 @@
 #define _FCGI_PROTO_H_
 
 #include <string>
+#include <vector>
 #include <unistd.h>
 
 #include "core/buffer.h"

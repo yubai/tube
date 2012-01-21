@@ -5,7 +5,6 @@
 namespace tube {
 namespace fcgi {
 
-
 void
 Record::append_to_buffer(Buffer& buffer)
 {

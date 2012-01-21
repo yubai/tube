@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <string>
+#include <vector>
 #include "utils/misc.h"
 #include "utils/lock.h"
 
