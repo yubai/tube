@@ -123,7 +123,7 @@ PollStage::trigger_timer_callback(Poller& poller)
 }
 
 size_t
-PollInStage::kMaxRecycleCount = 100;
+PollInStage::kMaxRecycleCount = 50;
 
 PollInStage::PollInStage()
     : PollStage("poll_in")
@@ -163,6 +163,10 @@ PollInStage::sched_remove_nolock(Connection* conn, bool recycle)
             }
             return;
         }
+    }
+    if (recycle) {
+        pollers_[current_poller_]->expired_connections().push_back(conn);
+        current_poller_ = (current_poller_ + 1) % pollers_.size();
     }
 }
 

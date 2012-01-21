@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <limits.h>
 #include <signal.h>
+#include <errno.h>
 
 #include "fcgi_completion_stage.h"
 
