@@ -140,6 +140,8 @@ Condition::timed_wait(Mutex& mutex, int timeout_msec)
     clock_gettime(CLOCK_REALTIME, &now);
     now.tv_sec += timeout_msec / 1000;
     now.tv_nsec += (timeout_msec % 1000) * 1000000;
+    now.tv_sec += now.tv_nsec / 1000000000;
+    now.tv_nsec %= 1000000000;
     int res = pthread_cond_timedwait(&cond_, mutex.pthread_mutex(), &now);
     if (res != 0 && res != ETIMEDOUT) {
         throw Exception();
