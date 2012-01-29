@@ -139,6 +139,7 @@ public:
      */
     void cleanup_connection(Connection* conn);
 private:
+    static int kMaxReadThreshold;
     void sched_remove_nolock(Connection* conn, bool recycle);
     void cleanup_connection(Poller& poller, Connection* conn);
     void read_connection(Poller& poller, Connection* conn);
@@ -177,6 +178,7 @@ public:
     virtual bool sched_add(Connection* conn);
     virtual void main_loop();
 private:
+    static int kMaxWriteThreshold;
     void cleanup_connection(Poller& poller, Connection* conn);
     void handle_connection(Poller& poller, Connection* conn, PollerEvent evt);
     void post_handle_connection(Poller& poller);

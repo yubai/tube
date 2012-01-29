@@ -230,6 +230,9 @@ PollInStage::cleanup_idle_connection_callback(Poller& poller, void* ptr)
     return true; // returning tree, so timer will delete this callback
 }
 
+int
+PollInStage::kMaxReadThreshold = 256 << 10;
+
 void
 PollInStage::read_connection(Poller& poller, Connection* conn)
 {
@@ -242,10 +245,15 @@ PollInStage::read_connection(Poller& poller, Connection* conn)
     update_connection(poller, conn, boost::bind(
                           &PollInStage::cleanup_idle_connection_callback,
                           this, boost::ref(poller), _1));
-    int nread;
+    int nread = 0;
     do {
-        nread = conn->in_stream().read_into_buffer();
-    } while (nread > 0);
+        int rs = conn->in_stream().read_into_buffer();
+        if (rs <= 0) {
+            nread = rs;
+            break;
+        }
+        nread += rs;
+    } while (nread < kMaxReadThreshold);
 
     if (nread < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
         // send it to parser stage
@@ -397,6 +405,9 @@ PollOutStage::cleanup_idle_connection_callback(Poller& poller, void* ptr)
     return true;
 }
 
+int
+PollOutStage::kMaxWriteThreshold = 1024 << 10;
+
 void
 PollOutStage::handle_connection(Poller& poller, Connection* conn,
                                 PollerEvent evt)
@@ -413,8 +424,13 @@ PollOutStage::handle_connection(Poller& poller, Connection* conn,
         int nwrite = 0;
         bool has_error = false;
         do {
-            nwrite = out.write_into_output();
-        } while (nwrite > 0);
+            int rs = out.write_into_output();
+            if (rs <= 0) {
+                nwrite = rs;
+                break;
+            }
+            nwrite += rs;
+        } while (nwrite < kMaxWriteThreshold);
 
         if (nwrite < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
             has_error = true;
